@@ -1,0 +1,17 @@
+tx_station_id,tx_component_id,rx_station_id,rx_component_id,frequency,real,imag,err_real,err_imag,tx_fundamental,use,ext_line_id
+TX1,E1,R1,Einline,0.25,3.20e-7,-4.10e-8,5.0e-9,4.8e-9,0.25,1,L100
+TX1,E1,R1,Einline,0.75,2.85e-7,-1.05e-7,6.0e-9,5.5e-9,0.25,1,L100
+TX1,E1,R1,Einline,1.25,2.40e-7,-1.60e-7,8.0e-9,7.5e-9,0.25,1,L100
+TX1,E1,R1,Einline,0.5,3.05e-7,-7.20e-8,5.5e-9,5.2e-9,0.5,1,L100
+TX1,E1,R1,Einline,1.5,2.20e-7,-1.85e-7,9.0e-9,8.6e-9,0.5,1,L100
+TX1,E1,R2,Einline,0.25,9.10e-8,-1.40e-8,2.2e-9,2.1e-9,0.25,1,L100
+TX1,E1,R2,Einline,0.75,7.60e-8,-3.30e-8,2.8e-9,2.6e-9,0.25,1,L100
+TX1,E1,R2,Einline,1.25,5.90e-8,-4.80e-8,4.5e-9,4.2e-9,0.25,1,L100
+TX1,E1,R2,Einline,0.5,8.30e-8,-2.30e-8,2.5e-9,2.4e-9,0.5,1,L100
+TX1,E1,R2,Einline,1.5,5.20e-8,-5.40e-8,5.0e-9,4.8e-9,0.5,1,L100
+TX1,E1,R3,Einline,0.25,2.80e-8,-6.10e-9,1.5e-9,1.4e-9,0.25,1,L100
+TX1,E1,R3,Einline,0.75,2.05e-8,-1.20e-8,2.0e-9,1.9e-9,0.25,1,L100
+TX1,E1,R3,Einline,1.25,1.30e-8,-1.55e-8,6.0e-9,5.8e-9,0.25,0,L100
+TX1,E1,R3,Einline,0.5,2.45e-8,-9.80e-9,1.8e-9,1.7e-9,0.5,1,L100
+TX1,E1,R3,Einline,2.5,6.50e-9,-1.20e-8,8.0e-9,7.6e-9,0.5,0,L100
+TX1,E1,R3,Einline,3.75,NaN,NaN,NaN,NaN,0.25,0,L100

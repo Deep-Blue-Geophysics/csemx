@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include head.html %}
+</head>
+<body>
+  {% include header.html %}
+  <main class="wrap doc-wrap">
+    <aside class="toc" aria-label="On this page">
+      <p class="toc-title">On this page</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+    <article class="doc-content">
+      {{ content }}
+    </article>
+  </main>
+  {% include footer.html %}
+  <script>
+  (function () {
+    var content = document.querySelector('.doc-content');
+    var nav = document.getElementById('toc-nav');
+    if (!content || !nav) return;
+    var heads = content.querySelectorAll('h2, h3');
+    if (heads.length < 3) { document.querySelector('.doc-wrap').classList.add('no-toc'); return; }
+    heads.forEach(function (h) {
+      if (!h.id) {
+        h.id = h.textContent.trim().toLowerCase()
+          .replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+      }
+      var a = document.createElement('a');
+      a.href = '#' + h.id;
+      a.textContent = h.textContent;
+      a.className = 'toc-' + h.tagName.toLowerCase();
+      nav.appendChild(a);
+    });
+    var links = nav.querySelectorAll('a');
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (l) { l.classList.remove('active'); });
+          var active = nav.querySelector('a[href="#' + e.target.id + '"]');
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { rootMargin: '0px 0px -75% 0px' });
+    heads.forEach(function (h) { obs.observe(h); });
+  })();
+  </script>
+</body>
+</html>

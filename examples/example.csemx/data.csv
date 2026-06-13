@@ -1,0 +1,7 @@
+tx_station_id,tx_component_id,rx_station_id,rx_component_id,frequency,real,imag,err_real,err_imag
+TX01,E1,001,Ex,0.125,2.14e-6,-3.10e-7,3.0e-8,2.8e-8
+TX01,E1,001,Ey,0.125,8.40e-7,-1.20e-7,2.0e-8,2.1e-8
+TX01,E1,001,Bz,0.125,5.30e-12,-9.10e-13,1.1e-13,1.0e-13
+TX01,E1,001,Bloop,0.125,-1.10e-9,-6.70e-9,1.2e-10,1.1e-10
+TX02,M1,001,Bz,0.125,7.80e-11,-1.40e-11,9.0e-13,8.5e-13
+BH1,M1,001,Bz,0.125,3.20e-11,-5.50e-12,4.0e-13,3.8e-13

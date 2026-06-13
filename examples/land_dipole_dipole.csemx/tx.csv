@@ -1,0 +1,2 @@
+tx_station_id,tx_component_id,geometry_type,azimuth_deg,dip_deg,point_moment_area_m2
+TX1,E1,wire,,,

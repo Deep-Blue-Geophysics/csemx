@@ -1,0 +1,3 @@
+tx_station_id,tx_component_id,vertex_index,easting,northing,elev,ext_grid_x,ext_grid_y
+TX1,E1,0,551050.00,3624072.00,1479.00,50.00,72.00
+TX1,E1,1,551450.00,3624072.00,1479.00,450.00,72.00

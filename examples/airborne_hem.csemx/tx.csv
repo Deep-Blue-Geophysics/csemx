@@ -1,0 +1,7 @@
+tx_station_id,tx_component_id,geometry_type,azimuth_deg,dip_deg,point_moment_area_m2
+TXP1,Mcp,point,0,90,0.196
+TXP1,Mca,point,90,0,0.196
+TXP2,Mcp,point,0,90,0.196
+TXP2,Mca,point,90,0,0.196
+TXP3,Mcp,point,0,90,0.196
+TXP3,Mca,point,90,0,0.196

@@ -1,0 +1,55 @@
+name: Deploy Pages site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress run.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The site source lives in web/. The canonical documents stay at the repo
+      # root; copy them into the build so they publish without being duplicated
+      # in git.
+      - name: Assemble documents into site source
+        run: |
+          cp csemx-specification.md csemx-rationale.md web/
+          mkdir -p web/examples
+          cp examples/README.md web/examples/README.md
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: web
+
+      - name: Build with Jekyll
+        run: bundle exec jekyll build
+        working-directory: web
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

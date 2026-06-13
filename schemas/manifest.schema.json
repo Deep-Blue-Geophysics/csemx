@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://csemx.org/schemas/manifest.schema.json",
+  "title": "csemx manifest",
+  "description": "JSON Schema for manifest.yaml in a csemx v1.0 bundle.",
+  "type": "object",
+  "required": [
+    "format",
+    "domain",
+    "survey",
+    "coordinate_system",
+    "elevation",
+    "sign"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "csemx"
+        },
+        "version": {
+          "const": "1.0"
+        }
+      }
+    },
+    "domain": {
+      "const": "frequency"
+    },
+    "survey": {
+      "type": "object",
+      "required": [
+        "name",
+        "revision",
+        "acquired_start",
+        "acquired_end",
+        "contractor",
+        "contractor_reference"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "acquired_start": {
+          "$ref": "#/$defs/acquisition_endpoint"
+        },
+        "acquired_end": {
+          "$ref": "#/$defs/acquisition_endpoint"
+        },
+        "contractor": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "contractor_reference": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    },
+    "coordinate_system": {
+      "type": "object",
+      "required": [
+        "epsg_horizontal"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "epsg_horizontal": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "elevation": {
+      "type": "object",
+      "required": [
+        "epsg_vertical"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "epsg_vertical": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "altitude": {
+      "type": "object",
+      "required": [
+        "reference"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "enum": [
+            "seafloor",
+            "ground"
+          ]
+        }
+      }
+    },
+    "sign": {
+      "type": "object",
+      "required": [
+        "time_dependence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "time_dependence": {
+          "enum": [
+            "exp(+iwt)",
+            "exp(-iwt)"
+          ]
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "content"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "enum": [
+            "total",
+            "secondary"
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "acquisition_endpoint": {
+      "type": "string",
+      "$comment": "Written as quoted YAML strings so they remain strings under any loader; an unquoted ISO date/timestamp parses as a YAML date/datetime object and fails this string type.",
+      "pattern": "^(\\d{4}-\\d{2}-\\d{2}|\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z)$"
+    }
+  }
+}

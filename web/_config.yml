@@ -1,0 +1,37 @@
+title: csemx
+tagline: An open exchange format for CSEM data
+description: >-
+  An open, vendor-neutral exchange format for modeling-ready frequency-domain
+  controlled-source electromagnetic (CSEM) data.
+
+url: "https://deep-blue-geophysics.github.io"
+baseurl: "/csemx"
+repo: "https://github.com/Deep-Blue-Geophysics/csemx"
+feedback_email: "csemx@deepbluegeophysics.com"
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
+
+# Doc markdown pages get the default layout; index.html sets its own (home).
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+# The site source (web/) holds only the page templates, assets, index, and the
+# documents copied in at build time, so only build artifacts need excluding.
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - Gemfile.lock
+  - vendor

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csemx"
+version = "0.1.0"
+description = "Client I/O and validation utilities for csemx bundles"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Deep Blue Geophysics" }
+]
+dependencies = []
+
+[project.optional-dependencies]
+full = [
+  "PyYAML",
+  "jsonschema",
+  "pyproj",
+  "pyarrow"
+]
+
+[project.scripts]
+csemx = "csemx.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+csemx = ["schemas/*.json"]

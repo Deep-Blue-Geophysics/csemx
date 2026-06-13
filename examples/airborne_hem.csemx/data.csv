@@ -1,0 +1,10 @@
+tx_station_id,tx_component_id,rx_station_id,rx_component_id,frequency,real,imag,err_real,err_imag,use
+TXP1,Mcp,RXP1,Bcp,7200,5.00e-14,-1.50e-14,1.0e-15,9.5e-16,1
+TXP1,Mcp,RXP1,Bcp,56000,3.00e-14,-2.50e-14,1.2e-15,1.1e-15,1
+TXP1,Mca,RXP1,Bca,7200,4.00e-14,-1.20e-14,9.0e-16,8.6e-16,1
+TXP2,Mcp,RXP2,Bcp,7200,5.20e-14,-1.55e-14,1.0e-15,9.6e-16,1
+TXP2,Mcp,RXP2,Bcp,56000,3.10e-14,-2.60e-14,1.2e-15,1.1e-15,1
+TXP2,Mca,RXP2,Bca,7200,4.15e-14,-1.25e-14,9.2e-16,8.7e-16,1
+TXP3,Mcp,RXP3,Bcp,7200,4.85e-14,-1.45e-14,1.0e-15,9.4e-16,1
+TXP3,Mcp,RXP3,Bcp,56000,2.90e-14,-2.45e-14,3.0e-15,2.9e-15,0
+TXP3,Mca,RXP3,Bca,7200,3.95e-14,-1.18e-14,9.0e-16,8.5e-16,1

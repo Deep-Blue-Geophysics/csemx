@@ -1,0 +1,4 @@
+tx_station_id,tx_component_id,geometry_type,azimuth_deg,dip_deg,point_moment_area_m2
+TX01,E1,wire,,,
+TX02,M1,loop,,,
+BH1,M1,point,0,90,0.0079

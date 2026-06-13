@@ -1,0 +1,25 @@
+format:
+  name: csemx
+  version: "1.0"
+
+domain: frequency
+
+survey:
+  name: "Marine Seafloor CSEM Survey C"
+  revision: 1
+  acquired_start: "2026-05-10"
+  acquired_end: "2026-05-18"
+  contractor: "Synthetic Producer"
+  contractor_reference: "Example C-003"
+
+coordinate_system:
+  epsg_horizontal: 32632
+
+elevation:
+  epsg_vertical: 4979
+
+altitude:
+  reference: seafloor
+
+sign:
+  time_dependence: "exp(+iwt)"

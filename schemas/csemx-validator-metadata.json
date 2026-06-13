@@ -1,0 +1,172 @@
+{
+  "$comment": "Lightweight csemx validator metadata consumed by the validator. This is not a formal JSON Schema or Frictionless Data Package.",
+  "format": {
+    "name": "csemx",
+    "version": "1.0"
+  },
+  "bundle": {
+    "required_fixed_files": [
+      "manifest.yaml"
+    ],
+    "required_tables": [
+      "tx",
+      "tx_vertices",
+      "rx",
+      "rx_vertices",
+      "data"
+    ],
+    "table_formats": [
+      "csv",
+      "parquet"
+    ],
+    "optional_files": [
+      "notes.md"
+    ]
+  },
+  "tables": {
+    "tx": {
+      "required_columns": [
+        "tx_station_id",
+        "tx_component_id",
+        "geometry_type"
+      ],
+      "optional_columns": [
+        "azimuth_deg",
+        "dip_deg",
+        "point_moment_area_m2",
+        "notes"
+      ],
+      "extension_prefixes": [
+        "ext_"
+      ],
+      "unique_key": [
+        "tx_station_id",
+        "tx_component_id"
+      ]
+    },
+    "tx_vertices": {
+      "required_columns": [
+        "tx_station_id",
+        "tx_component_id",
+        "vertex_index",
+        "easting",
+        "northing",
+        "elev"
+      ],
+      "optional_columns": [
+        "altitude"
+      ],
+      "extension_prefixes": [
+        "ext_"
+      ],
+      "unique_key": [
+        "tx_station_id",
+        "tx_component_id",
+        "vertex_index"
+      ]
+    },
+    "rx": {
+      "required_columns": [
+        "rx_station_id",
+        "rx_component_id",
+        "geometry_type"
+      ],
+      "optional_columns": [
+        "azimuth_deg",
+        "dip_deg",
+        "notes"
+      ],
+      "extension_prefixes": [
+        "ext_"
+      ],
+      "unique_key": [
+        "rx_station_id",
+        "rx_component_id"
+      ]
+    },
+    "rx_vertices": {
+      "required_columns": [
+        "rx_station_id",
+        "rx_component_id",
+        "vertex_index",
+        "easting",
+        "northing",
+        "elev"
+      ],
+      "optional_columns": [
+        "altitude"
+      ],
+      "extension_prefixes": [
+        "ext_"
+      ],
+      "unique_key": [
+        "rx_station_id",
+        "rx_component_id",
+        "vertex_index"
+      ]
+    },
+    "data": {
+      "required_columns": [
+        "tx_station_id",
+        "tx_component_id",
+        "rx_station_id",
+        "rx_component_id",
+        "frequency",
+        "real",
+        "imag",
+        "err_real",
+        "err_imag"
+      ],
+      "optional_columns": [
+        "tx_fundamental",
+        "use"
+      ],
+      "extension_prefixes": [
+        "ext_"
+      ],
+      "unique_key": [
+        "tx_station_id",
+        "tx_component_id",
+        "rx_station_id",
+        "rx_component_id",
+        "frequency"
+      ]
+    }
+  },
+  "enums": {
+    "domain": [
+      "frequency"
+    ],
+    "time_dependence": [
+      "exp(+iwt)",
+      "exp(-iwt)"
+    ],
+    "geometry_type": [
+      "point",
+      "wire",
+      "loop"
+    ],
+    "altitude_reference": [
+      "seafloor",
+      "ground"
+    ],
+    "field_content": [
+      "total",
+      "secondary"
+    ]
+  },
+  "geometry": {
+    "vertex_counts": {
+      "point": {
+        "min": 1,
+        "max": 1
+      },
+      "wire": {
+        "min": 2
+      },
+      "loop": {
+        "min": 3
+      }
+    }
+  }
+}

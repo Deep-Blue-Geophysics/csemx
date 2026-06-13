@@ -1,0 +1,28 @@
+format:
+  name: csemx
+  version: "1.0"
+
+domain: frequency
+
+survey:
+  name: "Airborne FDEM Survey F"
+  revision: 1
+  acquired_start: "2026-05-20"
+  acquired_end: "2026-05-22"
+  contractor: "Synthetic Producer"
+  contractor_reference: "Example F-006"
+
+coordinate_system:
+  epsg_horizontal: 32614
+
+elevation:
+  epsg_vertical: 4979
+
+altitude:
+  reference: ground
+
+sign:
+  time_dependence: "exp(+iwt)"
+
+field:
+  content: secondary

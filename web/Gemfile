@@ -1,0 +1,5 @@
+source "https://rubygems.org"
+
+# Mirrors the gem set GitHub Pages uses, so the Actions build matches what
+# a branch-based Pages build would produce (Jekyll + jekyll-relative-links, etc.).
+gem "github-pages", group: :jekyll_plugins

@@ -1,0 +1,7 @@
+rx_station_id,rx_component_id,geometry_type,azimuth_deg,dip_deg
+SF01,Ex,wire,,
+SF01,Ey,wire,,
+SF01,Ez,wire,,
+SF01,Bx,point,0,0
+SF01,By,point,90,0
+SF01,Bz,point,0,90

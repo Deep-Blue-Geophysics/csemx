@@ -1,0 +1,4 @@
+rx_station_id,rx_component_id,geometry_type,azimuth_deg,dip_deg
+R1,Einline,wire,,
+R2,Einline,wire,,
+R3,Einline,wire,,

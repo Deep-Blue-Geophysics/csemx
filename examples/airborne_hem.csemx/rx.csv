@@ -1,0 +1,7 @@
+rx_station_id,rx_component_id,geometry_type,azimuth_deg,dip_deg
+RXP1,Bcp,point,0,90
+RXP1,Bca,point,90,0
+RXP2,Bcp,point,0,90
+RXP2,Bca,point,90,0
+RXP3,Bcp,point,0,90
+RXP3,Bca,point,90,0

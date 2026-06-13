@@ -1,0 +1,105 @@
+---
+layout: home
+title: null
+---
+
+<section class="intro">
+  <div class="wrap">
+    <h1 class="intro-title">csemx</h1>
+    <p class="intro-sub">An open, vendor-neutral exchange format for modeling-ready
+      frequency-domain controlled-source electromagnetic (CSEM) data.</p>
+    <p class="intro-status">Status: pre-circulation draft (1.0), open for technical review.
+      Not yet frozen.</p>
+    <nav class="intro-links" aria-label="Documents">
+      <a href="{{ '/csemx-specification.html' | relative_url }}">Specification</a>
+      <a href="{{ '/csemx-rationale.html' | relative_url }}">Rationale</a>
+      <a href="{{ '/examples/' | relative_url }}">Examples</a>
+      <a href="{{ site.repo }}">Repository ↗</a>
+    </nav>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap prose">
+    <p>A <code>csemx</code> bundle carries calibrated, current-normalized complex response
+      functions together with the explicit transmitter and receiver geometry, coordinate
+      reference system, units, and sign/phase conventions needed to model them. A producer
+      exports once and any code that implements the format can read the delivery, replacing
+      a matrix of bespoke per-vendor converters.</p>
+    <p>A bundle is a self-describing ZIP archive of CSV or Parquet tables with a
+      human-readable manifest, so the data remains inspectable long after delivery and is
+      suitable for archival of final, processed CSEM datasets.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap two-col">
+    <div>
+      <h2 class="col-h">What it carries</h2>
+      <ul class="plain">
+        <li>Calibrated, current-normalized complex response functions</li>
+        <li>Explicit 3D transmitter and receiver geometry</li>
+        <li>Coordinate reference system, units, and orientation</li>
+        <li>Mandatory, documented sign and phase conventions</li>
+        <li>A producer data-quality recommendation per datum</li>
+      </ul>
+    </div>
+    <div>
+      <h2 class="col-h">Out of scope</h2>
+      <ul class="plain">
+        <li>Raw acquisition / instrument output</li>
+        <li>Magnetotelluric (MT) data</li>
+        <li>Inversion or modeling settings</li>
+        <li>Calibration internals</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap two-col wide-left">
+    <div>
+      <h2 class="col-h">Bundle structure</h2>
+      <p class="muted">A delivered bundle is a <code>.csemx.zip</code> archive containing one
+        top-level directory. Each required table is supplied exactly once, as CSV or Parquet;
+        the specification defines the columns, geometry conventions, units, normalization, and
+        validation rules.</p>
+    </div>
+    <pre class="filetree"><code>&lt;bundle-name&gt;/
+├── manifest.yaml
+├── tx.csv | tx.parquet
+├── tx_vertices.csv | tx_vertices.parquet
+├── rx.csv | rx.parquet
+├── rx_vertices.csv | rx_vertices.parquet
+├── data.csv | data.parquet
+└── notes.md          <span class="cmt"># optional</span></code></pre>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2 class="col-h">Validating a bundle</h2>
+    <pre class="code"><code>python3 -m pip install -e "./python[full]"
+csemx validate --full examples/example.csemx.zip
+csemx inspect examples/example.csemx</code></pre>
+    <p class="muted">MATLAB helpers under <code>matlab/+csemx</code> provide <code>csemx.read</code>,
+      <code>csemx.write</code>, and <code>csemx.validate</code>. See the
+      <a href="{{ site.repo }}">repository</a> for full instructions.</p>
+  </div>
+</section>
+
+<section class="section" id="feedback">
+  <div class="wrap prose">
+    <h2 class="col-h">Feedback</h2>
+    <p>The conventions are not frozen, and technical review from people who acquire, process,
+      and model CSEM data is what this stage is for. Draft comments are welcome through
+      <strong>July 31, 2026</strong>; later comments are still tracked.</p>
+    <ul class="plain">
+      <li><a href="mailto:{{ site.feedback_email }}">Email</a> — plain prose is fine; ask for a PDF to annotate.</li>
+      <li><a href="{{ site.repo }}/issues">GitHub Issues</a> — a specific defect or single concrete change.</li>
+      <li><a href="{{ site.repo }}/discussions">GitHub Discussions</a> — open-ended design questions.</li>
+      <li><a href="{{ site.repo }}/pulls">Pull request</a> — to propose exact wording.</li>
+    </ul>
+    <p class="muted">No GitHub account is needed; emailed comments reach the same backlog.</p>
+  </div>
+</section>

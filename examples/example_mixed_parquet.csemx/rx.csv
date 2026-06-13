@@ -1,0 +1,7 @@
+rx_station_id,rx_component_id,geometry_type,azimuth_deg,dip_deg
+001,Ex,wire,,
+001,Ey,wire,,
+001,Bx,point,0,0
+001,By,point,90,0
+001,Bz,point,0,90
+001,Bloop,loop,,

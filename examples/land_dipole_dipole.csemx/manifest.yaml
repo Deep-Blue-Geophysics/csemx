@@ -1,0 +1,22 @@
+format:
+  name: csemx
+  version: "1.0"
+
+domain: frequency
+
+survey:
+  name: "Land CSEM Survey A"
+  revision: 1
+  acquired_start: "2026-04-01"
+  acquired_end: "2026-04-05"
+  contractor: "Synthetic Producer"
+  contractor_reference: "Example A-001"
+
+coordinate_system:
+  epsg_horizontal: 32612
+
+elevation:
+  epsg_vertical: 4979
+
+sign:
+  time_dependence: "exp(+iwt)"
