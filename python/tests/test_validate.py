@@ -193,13 +193,31 @@ class ValidatorRegressionTests(unittest.TestCase):
         bundle = self.copy_example()
         replace_text(
             bundle / "manifest.yaml",
-            '  version: "1.0"',
-            '  version: "1.00"',
+            '  version: "0.1"',
+            '  version: "0.01"',
         )
 
         errors, _warnings = self.validate_bundle(bundle)
 
         self.assertIn("manifest format.version must be canonical MAJOR.MINOR", errors)
+
+    def test_beta_validator_rejects_other_versions(self):
+        # Spec §12: during the 0.x beta only the exact supported version is
+        # accepted — no cross-minor promise, and 1.0 does not exist yet.
+        for version in ("0.0", "0.2", "1.0"):
+            with self.subTest(version=version):
+                bundle = self.copy_example()
+                replace_text(
+                    bundle / "manifest.yaml",
+                    '  version: "0.1"',
+                    f'  version: "{version}"',
+                )
+
+                errors, _warnings = self.validate_bundle(bundle)
+                self.assertTrue(
+                    any("is not supported by validator 0.1" in error for error in errors),
+                    errors,
+                )
 
     def test_manifest_identity_strings_must_not_be_whitespace_only(self):
         cases = [
@@ -441,9 +459,19 @@ class ValidatorRegressionTests(unittest.TestCase):
         self.assertTrue(any("self-intersects" in warning for warning in warnings), warnings)
 
     def test_format_version_accepts_older_minor_for_supported_major(self):
+        # The additive-minor acceptance rule applies from major version 1 on.
         errors = []
         validate_csemx.validate_format_version("1.0", "1.2", errors)
         self.assertEqual([], errors)
+
+    def test_format_version_beta_requires_exact_match(self):
+        errors = []
+        validate_csemx.validate_format_version("0.1", "0.1", errors)
+        self.assertEqual([], errors)
+        validate_csemx.validate_format_version("0.0", "0.1", errors)
+        validate_csemx.validate_format_version("0.2", "0.1", errors)
+        validate_csemx.validate_format_version("1.0", "0.1", errors)
+        self.assertEqual(3, len(errors))
 
     def test_format_version_rejects_newer_minor_and_other_major(self):
         errors = []
@@ -539,7 +567,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_malformed_manifest_mapping_reports_errors(self):
         bundle = self.copy_example()
-        replace_text(bundle / "manifest.yaml", 'format:\n  name: csemx\n  version: "1.0"', "format: csemx")
+        replace_text(bundle / "manifest.yaml", 'format:\n  name: csemx\n  version: "0.1"', "format: csemx")
 
         errors, _warnings = self.validate_bundle(bundle)
         self.assertTrue(any("manifest format must be a mapping" in error for error in errors), errors)

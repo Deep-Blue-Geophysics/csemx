@@ -8,7 +8,7 @@
 
 format: # Identifies the file format. Do not change this block.
   name: csemx # Always exactly: csemx
-  version: "1.0" # The csemx specification version this bundle follows. Always "1.0" (with quotes) for now.
+  version: "0.1" # The csemx specification version this bundle follows. Always "0.1" (with quotes) for this beta release.
 
 # The kind of data in the bundle. Version 1.0 defines only frequency-domain
 # data, so this is always exactly: frequency. Do not change.

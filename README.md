@@ -40,12 +40,13 @@ of scope.
 
 ## Status
 
-Pre-circulation draft. The format is open for technical review and is not frozen
-as v1.0.
+Beta. The current release is **v0.1**: the format is open for technical review,
+and breaking changes may still occur between 0.x releases before the format
+freezes at v1.0 (spec §12).
 
-v1.0 is frequency-domain only. Time-domain electromagnetic data is the priority
+v0.1 is frequency-domain only. Time-domain electromagnetic data is the priority
 for a post-v1.0 revision (see the roadmap note in
-[`csemx-rationale.md`](csemx-rationale.md)); v1.0 readers reject any
+[`csemx-rationale.md`](csemx-rationale.md)); v0.1 readers reject any
 `domain` other than `frequency`.
 
 ## Documents

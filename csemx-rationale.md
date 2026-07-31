@@ -432,14 +432,20 @@ one line are independent because the two traverses are physically independent.
 
 ## §12 Versioning
 
-Additive-only minor versions let a `MAJOR.X` reader accept any `MAJOR.Y` bundle
-(Y ≤ X) and ignore unknown optional additions, so the format can grow (new
-optional columns, manifest keys, files) without breaking existing readers.
-Anything that would break a reader bumps `MAJOR`. Because the unit of every
-quantity is pinned by `format.version` (§3.6), the version string is also what
-keeps a bundle self-describing on units without a manifest units block.
+From 1.0 on, additive-only minor versions let a `MAJOR.X` reader accept any
+`MAJOR.Y` bundle (Y ≤ X) and ignore unknown optional additions, so the format
+can grow (new optional columns, manifest keys, files) without breaking existing
+readers. Anything that would break a reader bumps `MAJOR`. Because the unit of
+every quantity is pinned by `format.version` (§3.6), the version string is also
+what keeps a bundle self-describing on units without a manifest units block.
 
-## Out of scope for v1.0
+That additive promise is deliberately withheld during the 0.x beta: readers
+accept only the exact 0.x version they implement, so review feedback can still
+reshape the format — even incompatibly — before the 1.0 freeze locks the
+compatibility contract. Version-0 bundles are for evaluation and early
+adoption, not long-term archives.
+
+## Out of scope for v0.1
 
 Deliberately deferred:
 
@@ -448,13 +454,13 @@ Deliberately deferred:
   time-domain model will be developed and tested using real datasets, and must
   define time-gate bounds and averaging, waveform and ramp representation,
   time-reference conventions, the response quantity, and current
-  normalization. csemx v1.0 defines only `domain: frequency`; readers must
+  normalization. csemx v0.1 defines only `domain: frequency`; readers must
   reject unsupported `domain` values (spec §4, §12).
 - **Natural-source EM (MT/AMT).** csemx is controlled-source only; natural-source
   deliverables remain separate.
 - **Environmental / medium properties.** Seawater conductivity, CTD profiles,
   borehole fluids, bathymetry, and earth models are modeling inputs, not csemx
   response data.
-- **Graded quality codes.** v1.0 keeps only the binary advisory `use` flag.
+- **Graded quality codes.** v0.1 keeps only the binary advisory `use` flag.
 - **Time-lapse linkage.** Relationships between repeat surveys belong in
   external project metadata.

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://csemx.org/schemas/manifest.schema.json",
   "title": "csemx manifest",
-  "description": "JSON Schema for manifest.yaml in a csemx v1.0 bundle.",
+  "description": "JSON Schema for manifest.yaml in a csemx v0.1 bundle.",
   "type": "object",
   "required": [
     "format",
@@ -26,7 +26,7 @@
           "const": "csemx"
         },
         "version": {
-          "const": "1.0"
+          "const": "0.1"
         }
       }
     },

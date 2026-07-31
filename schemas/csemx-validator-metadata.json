@@ -2,7 +2,7 @@
   "$comment": "Lightweight csemx validator metadata consumed by the validator. This is not a formal JSON Schema or Frictionless Data Package.",
   "format": {
     "name": "csemx",
-    "version": "1.0"
+    "version": "0.1"
   },
   "bundle": {
     "required_fixed_files": [

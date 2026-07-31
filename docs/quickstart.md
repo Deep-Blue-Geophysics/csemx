@@ -104,7 +104,7 @@ can trace any station or component ID from one table to the next.
 ```yaml
 format:
   name: csemx
-  version: "1.0"
+  version: "0.1"
 
 domain: frequency
 
@@ -128,7 +128,7 @@ sign:
 
 In plain terms:
 
-- `format` and `domain` — write these exactly as shown for a version 1.0
+- `format` and `domain` — write these exactly as shown for a version 0.1
   bundle.
 - `survey` — your survey name, your company name, and your job or contract
   reference. `revision` starts at 1 and goes up by one each time you re-ship a

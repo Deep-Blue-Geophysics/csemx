@@ -705,15 +705,21 @@ def parse_version(value, label, errors):
 
 
 def validate_format_version(value, supported_version, errors):
-    # Reader compatibility follows spec §12. With v1.0 metadata this accepts only
-    # 1.0.
+    # Reader compatibility follows spec §12: during the 0.x beta only the exact
+    # supported version is accepted (0.x minors may break); from 1.0 on, older
+    # minors of the same major are accepted. With v0.1 metadata this accepts
+    # only 0.1.
     parsed = parse_version(value, "manifest format.version", errors)
     supported = parse_version(supported_version, "validator format.version", errors)
     if parsed is None or supported is None:
         return
     major, minor = parsed
     supported_major, supported_minor = supported
-    if major != supported_major or minor > supported_minor:
+    if supported_major == 0:
+        compatible = (major, minor) == (supported_major, supported_minor)
+    else:
+        compatible = major == supported_major and minor <= supported_minor
+    if not compatible:
         errors.append(
             f"manifest format.version {major}.{minor} is not supported by validator {supported_major}.{supported_minor}"
         )

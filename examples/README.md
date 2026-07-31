@@ -28,7 +28,7 @@ required tables, plus an optional `notes.md` and an optional `groups.csv`
 element-membership table, spec §10); `example.csemx.zip` is the archived form
 showing the preferred single-top-level-directory delivery shape.
 
-Most example bundles are kept in CSV form for readability. The v1.0 specification
+Most example bundles are kept in CSV form for readability. The specification
 allows any required table to be delivered as Parquet (`<table>.parquet`) instead
 of CSV; `example_mixed_parquet.csemx` exercises that path by using
 `data.parquet`.

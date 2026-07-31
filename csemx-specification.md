@@ -1,11 +1,12 @@
-# csemx 1.0 — Specification (DRAFT)
+# csemx 0.1 — Specification (BETA)
 
-> **Status**: Pre-circulation draft. Subject to revision before any v1.0 freeze.
+> **Status**: Beta. Breaking changes may occur between 0.x releases (§12); the
+> format freezes at v1.0.
 
 ## 1. Identity and Purpose
 
 - **Name**: `csemx` (controlled-source EM data bundle)
-- **Version**: 1.0 (draft)
+- **Version**: 0.1 (beta)
 - **File extension**: `.csemx.zip`
 - **MIME type**: `application/vnd.csemx+zip`
 
@@ -433,7 +434,7 @@ it is derived outside the csemx datum.
 
 `field.content` applies to the whole bundle. It must not be `secondary` when
 any data row has `frequency = 0`: the free-space secondary-field convention is
-not defined at DC in v1.0 (§3.12).
+not defined at DC in v0.1 (§3.12).
 
 ### 3.12 DC and Static-Limit Data
 
@@ -537,7 +538,7 @@ remain encoded by the vertices (§6, §8). `nav_pos_sd_m` records the one-sigma
 radial uncertainty of the horizontal position represented by the vertices, and
 `nav_elev_sd_m` the one-sigma uncertainty of the vertex elevation.
 Axis-specific position uncertainties, position-error covariance, and complete
-navigation solutions are outside the normative v1.0 model; carry them in
+navigation solutions are outside the normative v0.1 model; carry them in
 `ext_*` columns or external provenance.
 
 **Time (`time_utc`).** The UTC time associated with the element's reported
@@ -586,7 +587,7 @@ positions. Consumers must not assume two components have identical navigation
 metadata solely because they share a station ID.
 
 **Derived motion quantities.** Velocity, speed over ground, course over
-ground, angular rates, and similar quantities are not normative v1.0 columns.
+ground, angular rates, and similar quantities are not normative v0.1 columns.
 Consumers may derive them from consecutive positions, attitudes, and
 `time_utc` values; implementations must account for angular wraparound (a
 heading change from 359° to 1° is 2°, not −358°). Producer-supplied motion
@@ -594,7 +595,7 @@ quantities may be carried in `ext_*` columns.
 
 **Scope.** In (optional, advisory): platform heading/pitch/roll; attitude
 uncertainty; horizontal and vertical position uncertainty; per-element UTC
-time. Out of the normative v1.0 model: raw navigation or IMU streams; mounting
+time. Out of the normative v0.1 model: raw navigation or IMU streams; mounting
 calibration; lever-arm and layback models; position/attitude covariance
 matrices; velocity, speed over ground, course over ground; heave and other
 derived vehicle-motion quantities; automatic geometry reconstruction from
@@ -606,9 +607,9 @@ navigation measurements. Mounting, layback, and processing details go in
 ```yaml
 format:
   name: csemx
-  version: "1.0"
+  version: "0.1"
 
-domain: frequency # v1.0 defines only `frequency`
+domain: frequency # v0.1 defines only `frequency`
 
 survey:
   name: "Example Survey"
@@ -634,8 +635,8 @@ field: # optional (§3.11); absent ⇒ content: total
   content: total # total | secondary
 ```
 
-All keys above are required unless noted. v1.0 defines only
-`domain: frequency`; readers that implement only v1.0 reject any other domain.
+All keys above are required unless noted. v0.1 defines only
+`domain: frequency`; readers that implement only v0.1 reject any other domain.
 Bundle-level free-form contractor notes belong in `notes.md` (§11), not in the
 manifest.
 
@@ -930,7 +931,7 @@ semantics.) Readers may ignore the table entirely.
 
 ### Kinds
 
-- `group_kind: line` is the only reserved, normatively defined kind in v1.0: a
+- `group_kind: line` is the only reserved, normatively defined kind in v0.1: a
   named traverse of transmitter or receiver elements, not necessarily straight —
   crooked land lines, curving tow tracks, and draped flight lines are all
   lines. Geometry is traced by member station positions.
@@ -951,7 +952,7 @@ semantics.) Readers may ignore the table entirely.
   `group_kind`. Kinds introduce no additional processing or data-selection
   semantics.
 
-Hierarchy is out of scope in v1.0: an element on line `1200N` and inside array
+Hierarchy is out of scope in v0.1: an element on line `1200N` and inside array
 `A1` has separate membership rows, and nesting stays implicit. Chainage is not
 a normative column; a producer-supplied designed or surveyed chainage may be
 carried in an `ext_*` column (e.g. `ext_chainage_m`) as provenance, which may
@@ -986,18 +987,23 @@ Readers must not interpret its contents programmatically.
 ## 12. Versioning
 
 - Spec version is the exact string `MAJOR.MINOR`, declared in `format.version`.
-  The v1.0 manifest schema accepts exactly `format.version: "1.0"`.
-- Within a major version, changes are additive: new optional columns, new
-  optional manifest keys, new optional files. Readers handling `MAJOR.X`
-  must accept any `MAJOR.Y` bundle (for Y ≤ X) and ignore unknown additions.
+  The v0.1 manifest schema accepts exactly `format.version: "0.1"`.
+- **Beta (major version 0).** While `MAJOR` is `0`, the format is in beta and
+  any `0.MINOR` bump may include breaking changes. Readers and validators
+  accept only the exact `0.MINOR` versions they explicitly implement; there is
+  no cross-minor compatibility promise before 1.0.
+- **From 1.0 on**, changes within a major version are additive: new optional
+  columns, new optional manifest keys, new optional files. Readers handling
+  `MAJOR.X` must accept any `MAJOR.Y` bundle (for Y ≤ X) and ignore unknown
+  additions.
 - The `domain` key is the exception to "ignore unknown additions": each domain
   defines its own data model, so a reader rejects — rather than ignores — a
   `domain` it does not implement (§4).
-- Breaking changes increment `MAJOR`. A `2.x` reader is not required to
-  read `1.x` bundles.
-- Producers must write the exact spec version they target. Readers must
-  verify `format.name == "csemx"` and `format.version` major matches a
-  supported version.
+- After beta, breaking changes increment `MAJOR`. A `2.x` reader is not
+  required to read `1.x` bundles.
+- Producers must write the exact spec version they target. Readers must verify
+  `format.name == "csemx"` and that `format.version` is a version they
+  support.
 
 ## 13. Worked Example
 
@@ -1009,7 +1015,7 @@ electric dipoles, point magnetic coils, and a finite magnetic loop receiver.
 `manifest.yaml`:
 
 ```yaml
-format: { name: csemx, version: "1.0" }
+format: { name: csemx, version: "0.1" }
 domain: frequency
 survey:
   name: "Example"
