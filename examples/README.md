@@ -19,6 +19,7 @@ The public example set is:
 | `example.csemx` | mixed land/borehole sampler (matches spec §13) | every geometry flavor: wire/loop/point Tx, E-wire/B-point/B-loop Rx; UTC acquisition timestamps |
 | `example_mixed_parquet.csemx` | same geometry as `example.csemx`, with `data.parquet` | mixed CSV/Parquet delivery; string-typed IDs in Parquet |
 | `land_dipole_dipole.csemx` | land CSEM, inline dipole–dipole | grounded HED Tx + inline E-dipole Rx at increasing offset; `tx_fundamental`; `use=0`; `NaN` missing datum; `ext_line_id` extension |
+| `land_grid_lines.csemx` | land CSEM grid, two intersecting lines | the optional `groups.csv` table (§10): a station on two crossing lines (many-to-many membership); `sequence` as ranks with gaps; a fixed wire Tx shooting an Rx line without being a member of it; one line with independent TX and RX sequences; component-level `array` membership |
 | `seafloor_vector.csemx` | seafloor node + deep-towed 300 m HED | moving Tx; `altitude.reference: seafloor`; vertical `Ez` dipole; negative `elev`; `use` flag |
 | `airborne_hem.csemx` | airborne frequency-domain EM (HEM) | moving point-dipole bird; coplanar vs coaxial via `azimuth_deg`/`dip_deg`; `altitude.reference: ground`; `field.content: secondary` (secondary `T/A`, primary from geometry; ppm is derived); `nav_*` attitude/uncertainty columns and sub-second `time_utc` (§3.13) |
 

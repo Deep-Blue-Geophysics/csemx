@@ -1,0 +1,22 @@
+format:
+  name: csemx
+  version: "1.0"
+
+domain: frequency
+
+survey:
+  name: "Land CSEM Grid Survey B"
+  revision: 1
+  acquired_start: "2026-05-11"
+  acquired_end: "2026-05-16"
+  contractor: "Synthetic Producer"
+  contractor_reference: "Example B-002"
+
+coordinate_system:
+  epsg_horizontal: 32612
+
+elevation:
+  epsg_vertical: 4979
+
+sign:
+  time_dependence: "exp(+iwt)"

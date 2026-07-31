@@ -1,0 +1,13 @@
+group_kind,group_id,element_kind,station_id,component_id,sequence,notes
+line,L200E,rx,R01,,0,
+line,L200E,rx,R02,,10,
+line,L200E,rx,R03,,20,line crossing; also a member of L300N
+line,L200E,rx,R04,,30,
+line,L200E,rx,R05,,40,
+line,L300N,tx,TX2,,0,fixed source bipole at the south end of the line
+line,L300N,rx,R11,,0,
+line,L300N,rx,R03,,1,line crossing; also a member of L200E
+line,L300N,rx,R12,,2,
+line,L300N,rx,R13,,3,
+array,MAGZ,rx,R03,Bz,,vertical-coil subset used for a joint magnetic QC stack
+array,MAGZ,rx,R12,Bz,,vertical-coil subset used for a joint magnetic QC stack

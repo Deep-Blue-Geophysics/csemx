@@ -1,0 +1,3 @@
+tx_station_id,tx_component_id,geometry_type,azimuth_deg,dip_deg,point_moment_area_m2,notes
+TX1,E1,wire,,,,fixed 400 m E-W grounded bipole west of line L200E; shoots the L200E receiver line but is not a member of it
+TX2,E1,wire,,,,200 m N-S grounded bipole at the south end of line L300N

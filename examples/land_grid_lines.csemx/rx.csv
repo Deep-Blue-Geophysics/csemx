@@ -1,0 +1,12 @@
+rx_station_id,rx_component_id,geometry_type,azimuth_deg,dip_deg
+R01,Ex,wire,,
+R02,Ex,wire,,
+R03,Ex,wire,,
+R03,Ey,wire,,
+R03,Bz,point,0,90
+R04,Ex,wire,,
+R05,Ex,wire,,
+R11,Ey,wire,,
+R12,Ey,wire,,
+R12,Bz,point,0,90
+R13,Ey,wire,,
