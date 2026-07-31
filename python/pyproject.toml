@@ -5,11 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "csemx"
 version = "0.1.0"
-description = "Client I/O and validation utilities for csemx bundles"
+description = "Read, write, and validate csemx bundles - an open exchange format for frequency-domain CSEM data"
+readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
-  { name = "Deep Blue Geophysics" }
+  { name = "Deep Blue Geophysics", email = "csemx@deepbluegeophysics.com" }
+]
+keywords = [
+  "CSEM",
+  "controlled-source electromagnetics",
+  "geophysics",
+  "electromagnetics",
+  "data format",
+  "validation",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Topic :: File Formats",
 ]
 dependencies = []
 
@@ -20,6 +43,13 @@ full = [
   "pyproj",
   "pyarrow"
 ]
+
+[project.urls]
+Homepage = "https://deep-blue-geophysics.github.io/csemx/"
+Specification = "https://deep-blue-geophysics.github.io/csemx/csemx-specification.html"
+Repository = "https://github.com/Deep-Blue-Geophysics/csemx"
+Issues = "https://github.com/Deep-Blue-Geophysics/csemx/issues"
+Changelog = "https://github.com/Deep-Blue-Geophysics/csemx/blob/main/CHANGELOG.md"
 
 [project.scripts]
 csemx = "csemx.cli:main"

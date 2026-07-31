@@ -1,9 +1,19 @@
 # csemx — Python client
 
-Reference reader, writer, and validator for [csemx](../README.md) bundles. The
-core (`read`/`write` and the dependency-light checks) needs **no third-party
-packages**; the optional `full` extra adds the libraries required for complete
-conformance validation. Paths below are relative to the repository root.
+Reference reader, writer, and validator for
+[csemx](https://github.com/Deep-Blue-Geophysics/csemx) bundles — an open,
+vendor-neutral exchange format for modeling-ready frequency-domain
+controlled-source electromagnetic (CSEM) data
+([specification](https://deep-blue-geophysics.github.io/csemx/csemx-specification.html)).
+
+The core (`read`/`write` and the dependency-light checks) needs **no
+third-party packages**; the optional `full` extra adds the libraries required
+for complete conformance validation.
+
+> **Beta.** The package version tracks the format version it implements:
+> `csemx` 0.1.x reads and validates format 0.1 bundles exactly. During the
+> 0.x beta, format minor versions may include breaking changes and the
+> validator accepts only its own format version (spec §12).
 
 ## Contents
 
@@ -15,11 +25,16 @@ conformance validation. Paths below are relative to the repository root.
 
 ## Install
 
-From a checkout, editable:
+```bash
+python3 -m pip install csemx            # core: read/write + light checks
+python3 -m pip install "csemx[full]"    # + PyYAML, jsonschema, pyproj, pyarrow
+```
+
+From a repository checkout, editable:
 
 ```bash
-python3 -m pip install -e "./python"          # core: read/write + light checks
-python3 -m pip install -e "./python[full]"    # + PyYAML, jsonschema, pyproj, pyarrow
+python3 -m pip install -e "./python"
+python3 -m pip install -e "./python[full]"
 ```
 
 The `full` extra enables manifest JSON-Schema validation, EPSG/CRS checks, and
