@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: tests (py${{ matrix.python-version }}, ${{ matrix.deps }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the requires-python floor; 3.13 is current.
+        python-version: ["3.9", "3.13"]
+        # The suite must stay green without the optional dependencies (the
+        # dependency-light validator path) and with them (full conformance).
+        deps: [minimal, full]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install full validation dependencies
+        if: matrix.deps == 'full'
+        run: python -m pip install -r requirements-validation.txt
+      - name: Run test suite
+        run: python -m unittest discover -s python/tests
+      - name: Validate example bundles
+        run: tools/check_examples.sh
+      - name: Validate example bundles (full conformance)
+        if: matrix.deps == 'full'
+        run: tools/check_examples.sh --full
+
+  package:
+    name: package build + install smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Verify example.csemx.zip matches the unpacked bundle
+        run: python tools/rebuild_example_zip.py --check
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install build
+          python -m build python
+      - name: Verify packaged schemas are in both distributions
+        run: |
+          tar tzf python/dist/*.tar.gz | grep -q 'schemas/csemx-validator-metadata.json'
+          tar tzf python/dist/*.tar.gz | grep -q 'schemas/manifest.schema.json'
+          python -m zipfile -l python/dist/*.whl | grep -q 'schemas/csemx-validator-metadata.json'
+          python -m zipfile -l python/dist/*.whl | grep -q 'schemas/manifest.schema.json'
+      - name: Install wheel in a clean venv and smoke-test the CLI
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install python/dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/venv/bin/csemx" validate "$GITHUB_WORKSPACE/examples/example.csemx.zip"
+          "$RUNNER_TEMP/venv/bin/csemx" inspect "$GITHUB_WORKSPACE/examples/example.csemx"

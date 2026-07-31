@@ -6,6 +6,12 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+python/dist/
+python/build/
+*.egg-info/
+
+# Claude Code session artifacts (agent worktrees)
+.claude/
 
 # Jekyll / Pages build
 _site/
