@@ -42,7 +42,7 @@ jobs:
         run: bundle exec jekyll build
         working-directory: web
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: web/_site
 
