@@ -39,6 +39,9 @@ validate_bundle() {
 
 for bundle in examples/*.csemx; do
   case "$bundle" in
+    *template.csemx)
+      echo "SKIP: $bundle (fill-in template; intentionally does not validate)"
+      ;;
     *example_mixed_parquet.csemx)
       if [ "$FULL" -eq 1 ] || has_pyarrow; then
         validate_bundle "$bundle"

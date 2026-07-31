@@ -1,0 +1,3 @@
+group_kind,group_id,element_kind,station_id,component_id,sequence
+line,REPLACE_LINE_ID,tx,REPLACE_TX_STATION,,0
+line,REPLACE_LINE_ID,rx,REPLACE_RX_STATION,,0

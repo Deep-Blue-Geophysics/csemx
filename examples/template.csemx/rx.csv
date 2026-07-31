@@ -1,0 +1,2 @@
+rx_station_id,rx_component_id,geometry_type,azimuth_deg,dip_deg
+REPLACE_RX_STATION,REPLACE_RX_COMPONENT,REPLACE_wire_loop_or_point,,

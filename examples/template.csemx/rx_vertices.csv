@@ -1,0 +1,3 @@
+rx_station_id,rx_component_id,vertex_index,easting,northing,elev
+REPLACE_RX_STATION,REPLACE_RX_COMPONENT,0,,,
+REPLACE_RX_STATION,REPLACE_RX_COMPONENT,1,,,

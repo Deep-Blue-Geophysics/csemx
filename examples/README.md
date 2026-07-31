@@ -32,3 +32,17 @@ Most example bundles are kept in CSV form for readability. The v1.0 specificatio
 allows any required table to be delivered as Parquet (`<table>.parquet`) instead
 of CSV; `example_mixed_parquet.csemx` exercises that path by using
 `data.parquet`.
+
+## Fill-in template: `template.csemx`
+
+`template.csemx` is **not** a worked example — it is an editable, non-normative
+starting point for producers assembling a bundle by hand (in a text editor or
+spreadsheet, no programming required). It contains pre-headed CSV tables with
+`REPLACE`-marked placeholder rows, a fully commented `manifest.yaml`, a
+`notes.md` skeleton, an optional `groups.csv` starter, and a `README.md` with
+step-by-step fill-in instructions.
+
+Unlike the worked examples above, the template **intentionally fails
+validation as shipped** (placeholder coordinates and measurements are blank),
+so a half-filled copy cannot pass as a real delivery; it validates only once
+filled in. `tools/check_examples.sh` therefore skips it.
