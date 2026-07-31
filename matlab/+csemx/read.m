@@ -19,6 +19,10 @@ bundle.rx = readTable(tablePath(root, "rx"), "rx");
 bundle.rx_vertices = readTable(tablePath(root, "rx_vertices"), "rx_vertices");
 bundle.data = readTable(tablePath(root, "data"), "data");
 
+if isfile(fullfile(root, "groups.csv")) || isfile(fullfile(root, "groups.parquet"))
+    bundle.groups = readTable(tablePath(root, "groups"), "groups");
+end
+
 notesPath = fullfile(root, "notes.md");
 if isfile(notesPath)
     bundle.notes = fileread(notesPath);

@@ -359,7 +359,34 @@ and avoids phase wrapping, phase-unit choices, log-amplitude conventions, and a
 two-representations-per-bundle switch. Consumers that prefer amplitude/phase can
 derive it from the complex value and apply their own error model and floors.
 
-## §11 Versioning
+## §10 The groups table
+
+**Element metadata only, no data-group semantics.** A membership row says "this
+transmitter or receiver element is on line L100 / in array A1" and nothing
+more: the spec deliberately defines no canonical mapping from element groups to
+data rows. An earlier draft made the mapping normative with a double-join rule
+(a datum belonged to a group when *both* its Tx and its Rx were members), but
+that broke the most common acquisition style it was meant to serve: a fixed
+transmitter shooting a receiver line. The Tx is not a line member, so under the
+double join the line contained no data at all. Framing membership as element
+metadata makes TX-only and RX-only lines first-class and leaves datum selection
+(Rx-side, both-sides, cross-line comparisons, display-only) as an explicitly
+consumer-side policy.
+
+**Separate kind namespaces, one reserved kind.** `(group_kind, group_id)`
+identifies a group so a survey line and an array may reuse the same label
+without collision. Only `line` is normatively defined — it is the one grouping
+with an agreed cross-producer meaning (an ordered traverse) — while `array` is
+recommended-only and every other kind is a producer label that readers must
+pass through. Unknown kinds are never a validation error, so producers can
+encode fleet-, block-, or campaign-specific groupings without a spec change.
+
+**Ranks, not indices.** `sequence` orders a line's members by ascending sort
+and permits gaps, so producers can renumber, drop stations, or interleave
+planned/as-built numbering without rewriting every row; TX and RX orderings on
+one line are independent because the two traverses are physically independent.
+
+## §12 Versioning
 
 Additive-only minor versions let a `MAJOR.X` reader accept any `MAJOR.Y` bundle
 (Y ≤ X) and ignore unknown optional additions, so the format can grow (new

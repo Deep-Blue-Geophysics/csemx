@@ -89,10 +89,16 @@ PARQUET_STRING_COLUMNS = {
     "rx_component_id",
     "geometry_type",
     "notes",
+    "group_kind",
+    "group_id",
+    "element_kind",
+    "station_id",
+    "component_id",
 }
 PARQUET_INTEGER_COLUMNS = {
     "vertex_index",
     "use",
+    "sequence",
 }
 PARQUET_FLOAT_COLUMNS = {
     "azimuth_deg",
@@ -516,9 +522,14 @@ def parse_int_cell(value, label, errors):
 
 
 def check_unique(rows, key, label, errors):
+    # Blank normalization: an optional key column (e.g. groups.component_id) is
+    # empty "" in CSV and null in Parquet; both mean the same absent value.
     seen = set()
     for i, row in enumerate(rows, start=2):
-        value = tuple(canonical_key_value(row_value(row, col), col) for col in key)
+        value = tuple(
+            None if is_blank(cell := row_value(row, col)) else canonical_key_value(cell, col)
+            for col in key
+        )
         if value in seen:
             errors.append(f"{label}:{i}: duplicate key {value}")
         seen.add(value)
@@ -680,7 +691,7 @@ def parse_version(value, label, errors):
 
 
 def validate_format_version(value, supported_version, errors):
-    # Reader compatibility follows spec §11. With v1.0 metadata this accepts only
+    # Reader compatibility follows spec §12. With v1.0 metadata this accepts only
     # 1.0.
     parsed = parse_version(value, "manifest format.version", errors)
     supported = parse_version(supported_version, "validator format.version", errors)
@@ -1006,6 +1017,79 @@ def validate_data_row(row, row_label, tx_keys, rx_keys, errors):
             errors.append(f"{row_label}: errors must be >= 0")
 
 
+def validate_groups(table, schema, tx_keys, rx_keys, errors, warnings):
+    label = table["filename"]
+    station_ids = {
+        "tx": {key[0] for key in tx_keys},
+        "rx": {key[0] for key in rx_keys},
+    }
+    element_keys = {"tx": tx_keys, "rx": rx_keys}
+    station_wide = set()  # (group_kind, group_id, element_kind, station_id)
+    component_scoped = set()
+    sequences = {}  # (group_kind, group_id, element_kind) -> {sequence: row number}
+
+    for i, row in enumerate(table["rows"], start=2):
+        row_label = f"{label}:{i}"
+        kind = require_string(row.get("group_kind"), f"{row_label}:group_kind", COMPONENT_RE, errors)
+        group_id = require_string(row.get("group_id"), f"{row_label}:group_id", ID_RE, errors)
+        element_kind = row.get("element_kind")
+        if element_kind not in schema["enums"]["element_kind"]:
+            errors.append(f"{row_label}: element_kind must be tx or rx")
+            element_kind = None
+        station = require_string(row.get("station_id"), f"{row_label}:station_id", ID_RE, errors)
+        component = row.get("component_id", "")
+        validate_notes(row, row_label, errors)
+
+        if element_kind is not None and station is not None:
+            if station not in station_ids[element_kind]:
+                errors.append(
+                    f"{row_label}: unresolved station_id {station!r} for element_kind {element_kind}"
+                )
+            membership = (kind, group_id, element_kind, station)
+            if is_blank(component):
+                station_wide.add(membership)
+            else:
+                resolved = require_string(
+                    component, f"{row_label}:component_id", COMPONENT_RE, errors
+                )
+                # A populated component that does not resolve jointly with its
+                # station is an error, not a warning (§10).
+                if resolved is not None and (station, resolved) not in element_keys[element_kind]:
+                    errors.append(
+                        f"{row_label}: unresolved component_id {resolved!r} for "
+                        f"station_id {station!r} ({element_kind})"
+                    )
+                component_scoped.add(membership)
+
+        sequence = row.get("sequence", "")
+        if not is_blank(sequence):
+            parsed = parse_int_cell(sequence, f"{row_label}:sequence", errors)
+            if parsed is not None:
+                if parsed < 0:
+                    errors.append(f"{row_label}: sequence must be a nonnegative integer")
+                if kind is not None and kind != "line":
+                    warnings.append(
+                        f"{row_label}: sequence is defined for group_kind=line, "
+                        f"not {kind!r}"
+                    )
+                ordering = sequences.setdefault((kind, group_id, element_kind), {})
+                if parsed in ordering:
+                    errors.append(
+                        f"{row_label}: duplicate sequence {parsed} within "
+                        f"({kind!r}, {group_id!r}, {element_kind!r}); "
+                        f"first seen at {label}:{ordering[parsed]}"
+                    )
+                else:
+                    ordering[parsed] = i
+
+    for kind, group_id, element_kind, station in sorted(station_wide & component_scoped):
+        errors.append(
+            f"{label}: group ({kind!r}, {group_id!r}) has both a station-wide and a "
+            f"component-specific membership for {element_kind} station {station!r}; "
+            "the station-wide row already covers every component"
+        )
+
+
 def validate(
     bundle_path: str | Path,
     schema_path: str | Path = DEFAULT_SCHEMA,
@@ -1043,10 +1127,12 @@ def validate(
     tables = {}
     table_headers = {}
     table_files = set()
-    for table_name in bundle_schema["required_tables"]:
-        table_files.update(
-            f"{table_name}.{fmt}" for fmt in formats if f"{table_name}.{fmt}" in names
-        )
+    optional_tables = bundle_schema.get("optional_tables", [])
+    for table_name in list(bundle_schema["required_tables"]) + list(optional_tables):
+        present = {f"{table_name}.{fmt}" for fmt in formats if f"{table_name}.{fmt}" in names}
+        table_files.update(present)
+        if table_name in optional_tables and not present:
+            continue
         try:
             filename, header, rows = resolve_table(
                 bundle, names, table_name, schema["tables"][table_name], formats
@@ -1072,7 +1158,9 @@ def validate(
     validate_altitude_rule(manifest, table_headers, schema, errors)
 
     for table_name, table_schema in schema["tables"].items():
-        table = tables[table_name]
+        table = tables.get(table_name)
+        if table is None:  # Absent optional table.
+            continue
         validate_table_columns(table["header"], table_schema, table["filename"], errors)
         check_unique(table["rows"], table_schema.get("unique_key", []), table["filename"], errors)
 
@@ -1133,6 +1221,9 @@ def validate(
 
     for i, row in enumerate(tables["data"]["rows"], start=2):
         validate_data_row(row, f"{tables['data']['filename']}:{i}", tx_keys, rx_keys, errors)
+
+    if "groups" in tables:
+        validate_groups(tables["groups"], schema, tx_keys, rx_keys, errors, warnings)
 
     return errors, warnings
 

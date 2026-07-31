@@ -44,6 +44,10 @@ writeTable(fullfile(root, "rx.csv"), bundle.rx, "rx");
 writeTable(fullfile(root, "rx_vertices.csv"), bundle.rx_vertices, "rx_vertices");
 writeTable(fullfile(root, "data.csv"), bundle.data, "data");
 
+if isfield(bundle, "groups") && ~isempty(bundle.groups)
+    writeTable(fullfile(root, "groups.csv"), bundle.groups, "groups");
+end
+
 if isfield(bundle, "notes") && strlength(string(bundle.notes)) > 0
     writeText(fullfile(root, "notes.md"), bundle.notes);
 end

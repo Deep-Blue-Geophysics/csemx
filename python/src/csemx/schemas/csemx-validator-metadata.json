@@ -15,6 +15,9 @@
       "rx_vertices",
       "data"
     ],
+    "optional_tables": [
+      "groups"
+    ],
     "table_formats": [
       "csv",
       "parquet"
@@ -131,6 +134,29 @@
         "rx_component_id",
         "frequency"
       ]
+    },
+    "groups": {
+      "required_columns": [
+        "group_kind",
+        "group_id",
+        "element_kind",
+        "station_id"
+      ],
+      "optional_columns": [
+        "component_id",
+        "sequence",
+        "notes"
+      ],
+      "extension_prefixes": [
+        "ext_"
+      ],
+      "unique_key": [
+        "group_kind",
+        "group_id",
+        "element_kind",
+        "station_id",
+        "component_id"
+      ]
     }
   },
   "enums": {
@@ -145,6 +171,10 @@
       "point",
       "wire",
       "loop"
+    ],
+    "element_kind": [
+      "tx",
+      "rx"
     ],
     "altitude_reference": [
       "seafloor",

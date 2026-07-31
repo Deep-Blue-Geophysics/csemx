@@ -15,6 +15,7 @@ from typing import Any
 validator = importlib.import_module("csemx.validation")
 
 REQUIRED_TABLES = ("tx", "tx_vertices", "rx", "rx_vertices", "data")
+OPTIONAL_TABLES = ("groups",)
 
 
 @dataclass
@@ -43,6 +44,18 @@ def read(path: str | Path, schema_path: str | Path | None = None) -> CsemxBundle
     tables: dict[str, Table] = {}
     formats = schema["bundle"]["table_formats"]
     for table_name in REQUIRED_TABLES:
+        filename, columns, rows = validator.resolve_table(
+            bundle,
+            names,
+            table_name,
+            schema["tables"][table_name],
+            formats,
+        )
+        tables[table_name] = Table(filename=filename, columns=columns, rows=rows)
+
+    for table_name in OPTIONAL_TABLES:
+        if not any(f"{table_name}.{fmt}" in names for fmt in formats):
+            continue
         filename, columns, rows = validator.resolve_table(
             bundle,
             names,
@@ -112,6 +125,9 @@ def _write_directory(bundle: CsemxBundle, root: Path, *, overwrite: bool) -> Non
     )
     for table_name in REQUIRED_TABLES:
         _write_csv(root / f"{table_name}.csv", _coerce_table(bundle.tables[table_name]))
+    for table_name in OPTIONAL_TABLES:
+        if table_name in bundle.tables:
+            _write_csv(root / f"{table_name}.csv", _coerce_table(bundle.tables[table_name]))
     if bundle.notes is not None:
         (root / "notes.md").write_text(bundle.notes, encoding="utf-8")
 

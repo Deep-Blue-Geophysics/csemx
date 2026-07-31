@@ -735,5 +735,221 @@ class ValidatorRegressionTests(unittest.TestCase):
         self.assertIn("manifest field.content must be total or secondary", errors)
 
 
+GROUPS_HEADER = "group_kind,group_id,element_kind,station_id,component_id,sequence,notes\n"
+
+# References example.csemx elements: tx stations TX01/E1, TX02/M1, BH1/M1 and
+# rx station 001 with components Ex, Ey, Bx, By, Bz, Bloop. Exercises station-
+# wide and component-level memberships, independent TX/RX sequences sharing the
+# value 0 on one line, a recommended `array` kind, and an unknown kind.
+VALID_GROUPS = [
+    "line,L100,tx,TX01,,0,",
+    "line,L100,tx,TX02,,1,",
+    "line,L100,rx,001,,0,anchor station",
+    "array,A1,rx,001,Ex,,",
+    "array,A1,rx,001,Bz,,",
+    "block,B7,tx,BH1,,,",
+]
+
+
+def bundle_warnings(warnings):
+    """Drop environment warnings about missing optional dependencies."""
+
+    return [warning for warning in warnings if "not installed" not in warning]
+
+
+class GroupsTableTests(unittest.TestCase):
+    def copy_example(self):
+        tempdir = tempfile.TemporaryDirectory()
+        bundle = Path(tempdir.name) / "example.csemx"
+        shutil.copytree(EXAMPLE, bundle)
+        self.addCleanup(tempdir.cleanup)
+        return bundle
+
+    def copy_example_with_groups(self, rows):
+        bundle = self.copy_example()
+        (bundle / "groups.csv").write_text(
+            GROUPS_HEADER + "".join(row + "\n" for row in rows), encoding="utf-8"
+        )
+        return bundle
+
+    def validate_bundle(self, bundle):
+        return validate_csemx.validate(bundle, SCHEMA)
+
+    def test_bundle_without_groups_is_valid(self):
+        errors, warnings = self.validate_bundle(self.copy_example())
+        self.assertEqual([], errors)
+        self.assertEqual([], bundle_warnings(warnings))
+
+    def test_valid_groups_table_is_accepted_without_warnings(self):
+        bundle = self.copy_example_with_groups(VALID_GROUPS)
+        errors, warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+        self.assertEqual([], bundle_warnings(warnings))
+
+    def test_independent_tx_and_rx_sequences_share_values_on_one_line(self):
+        bundle = self.copy_example_with_groups(
+            [
+                "line,L200,tx,TX01,,0,",
+                "line,L200,rx,001,,0,",
+            ]
+        )
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+
+    def test_unknown_group_kind_is_never_an_error(self):
+        bundle = self.copy_example_with_groups(["fleet,F1,tx,TX02,,,"])
+        errors, warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+        self.assertEqual([], bundle_warnings(warnings))
+
+    def test_unresolved_station_id_is_an_error(self):
+        bundle = self.copy_example_with_groups(["line,L100,rx,R99,,0,"])
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("unresolved station_id 'R99' for element_kind rx" in error for error in errors),
+            errors,
+        )
+
+    def test_unresolved_populated_component_is_an_error(self):
+        bundle = self.copy_example_with_groups(["array,A1,rx,001,Bq,,"])
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("unresolved component_id 'Bq' for station_id '001'" in error for error in errors),
+            errors,
+        )
+
+    def test_duplicate_membership_rows_are_rejected(self):
+        bundle = self.copy_example_with_groups(
+            [
+                "array,A1,rx,001,Ex,,",
+                "array,A1,rx,001,Ex,,",
+            ]
+        )
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(any("duplicate key" in error for error in errors), errors)
+
+    def test_station_wide_and_component_specific_membership_must_not_coexist(self):
+        bundle = self.copy_example_with_groups(
+            [
+                "line,L100,rx,001,,0,",
+                "line,L100,rx,001,Ex,1,",
+            ]
+        )
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any(
+                "both a station-wide and a component-specific membership" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_duplicate_sequence_within_group_and_element_kind_is_rejected(self):
+        bundle = self.copy_example_with_groups(
+            [
+                "line,L100,rx,001,Ex,3,",
+                "line,L100,rx,001,Ey,3,",
+            ]
+        )
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(any("duplicate sequence 3" in error for error in errors), errors)
+
+    def test_negative_sequence_is_rejected(self):
+        bundle = self.copy_example_with_groups(["line,L100,tx,TX01,,-1,"])
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("sequence must be a nonnegative integer" in error for error in errors),
+            errors,
+        )
+
+    def test_sequence_on_non_line_kind_is_a_warning_not_error(self):
+        bundle = self.copy_example_with_groups(["array,A1,rx,001,Ex,0,"])
+        errors, warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+        self.assertTrue(
+            any("sequence is defined for group_kind=line" in warning for warning in warnings),
+            warnings,
+        )
+
+    def test_invalid_element_kind_is_rejected(self):
+        bundle = self.copy_example_with_groups(["line,L100,zz,001,,0,"])
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("element_kind must be tx or rx" in error for error in errors), errors
+        )
+
+    def test_group_kind_charset_and_length_are_enforced(self):
+        bundle = self.copy_example_with_groups([f"{'k' * 33},L100,tx,TX01,,0,"])
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("group_kind: invalid value" in error for error in errors), errors
+        )
+
+    def test_groups_notes_have_1024_character_limit(self):
+        bundle = self.copy_example_with_groups([f"line,L100,tx,TX01,,0,{'x' * 1025}"])
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any(":notes: must be at most 1024 characters" in error for error in errors),
+            errors,
+        )
+
+    def test_groups_round_trip_through_read_write(self):
+        source = self.copy_example_with_groups(VALID_GROUPS)
+        bundle = csemx.read(source)
+        self.assertIn("groups", bundle.tables)
+        self.assertEqual(len(VALID_GROUPS), len(bundle.tables["groups"].rows))
+
+        target = Path(tempfile.mkdtemp()) / "groups_roundtrip.csemx.zip"
+        csemx.write(bundle, target)
+
+        errors, warnings = csemx.validate(target)
+        self.assertEqual([], errors)
+        self.assertEqual([], bundle_warnings(warnings))
+
+    @unittest.skipIf(pa is None or pq is None, "pyarrow is not installed")
+    def test_groups_parquet_form_is_accepted(self):
+        bundle = self.copy_example_with_groups(VALID_GROUPS)
+        rows = [row.split(",") for row in VALID_GROUPS]
+        table = pa.table(
+            {
+                "group_kind": pa.array([r[0] for r in rows], type=pa.string()),
+                "group_id": pa.array([r[1] for r in rows], type=pa.string()),
+                "element_kind": pa.array([r[2] for r in rows], type=pa.string()),
+                "station_id": pa.array([r[3] for r in rows], type=pa.string()),
+                "component_id": pa.array(
+                    [r[4] or None for r in rows], type=pa.string()
+                ),
+                "sequence": pa.array(
+                    [int(r[5]) if r[5] else None for r in rows], type=pa.int64()
+                ),
+            }
+        )
+        pq.write_table(table, bundle / "groups.parquet")
+        (bundle / "groups.csv").unlink()
+
+        errors, warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+        self.assertEqual([], bundle_warnings(warnings))
+
+    @unittest.skipIf(pa is None or pq is None, "pyarrow is not installed")
+    def test_groups_must_appear_in_exactly_one_format(self):
+        bundle = self.copy_example_with_groups(VALID_GROUPS)
+        rows = [row.split(",") for row in VALID_GROUPS]
+        table = pa.table(
+            {
+                "group_kind": pa.array([r[0] for r in rows], type=pa.string()),
+                "group_id": pa.array([r[1] for r in rows], type=pa.string()),
+                "element_kind": pa.array([r[2] for r in rows], type=pa.string()),
+                "station_id": pa.array([r[3] for r in rows], type=pa.string()),
+            }
+        )
+        pq.write_table(table, bundle / "groups.parquet")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("exactly one format" in error for error in errors), errors
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

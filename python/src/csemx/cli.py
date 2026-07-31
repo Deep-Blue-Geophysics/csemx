@@ -64,9 +64,10 @@ def run_inspect(args: argparse.Namespace) -> int:
         name = survey.get("name", "")
         revision = survey.get("revision", "")
         print(f"Survey: {name} revision {revision}")
-    for table_name in io.REQUIRED_TABLES:
-        table = bundle.tables[table_name]
-        print(f"{table_name}: {len(table.rows)} rows ({table.filename})")
+    for table_name in (*io.REQUIRED_TABLES, *io.OPTIONAL_TABLES):
+        table = bundle.tables.get(table_name)
+        if table is not None:
+            print(f"{table_name}: {len(table.rows)} rows ({table.filename})")
     if bundle.notes is not None:
         print("notes.md: present")
     return 0

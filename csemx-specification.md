@@ -12,9 +12,9 @@
 A schema-validated, vendor-neutral interchange format for frequency-domain
 controlled-source electromagnetic (CSEM) data. A bundle carries **calibrated,
 normalized response functions** (§3.6–§3.7), the transmitter and receiver
-geometry needed to model them, and the producer's data-quality recommendation
-(`use`, §9). It carries no other normative structured payload. (Rationale:
-`csemx-rationale.md`.)
+geometry needed to model them, the producer's data-quality recommendation
+(`use`, §9), and optionally the element group membership of §10. It carries no
+other normative structured payload. (Rationale: `csemx-rationale.md`.)
 
 It is deliberately **not** a container for:
 
@@ -51,12 +51,14 @@ directory. The directory name is producer-chosen but must be filesystem-safe
 ├── rx.{csv|parquet}             [required]
 ├── rx_vertices.{csv|parquet}    [required]
 ├── data.{csv|parquet}           [required]
+├── groups.{csv|parquet}         [optional]
 └── notes.md                     [optional]
 ```
 
 Each table is delivered as **either** `<name>.csv` **or** `<name>.parquet`:
 exactly one per table, chosen independently (e.g. small geometry tables as CSV,
-a large `data` table as Parquet). A Parquet table holds the same
+a large `data` table as Parquet). The optional `groups` table (§10), when
+present, follows the same rules as the required tables. A Parquet table holds the same
 columns, constraints, and foreign keys (§5–§9) as its CSV form, with the column
 types of those sections as Parquet types; missing measurement values are the
 native floating-point `NaN` (§3.8). `manifest.yaml` is always YAML.
@@ -452,7 +454,7 @@ field: # optional (§3.11); absent ⇒ content: total
 
 All keys above are required unless noted. v1.0 defines only
 `domain: frequency`; readers that implement only v1.0 reject any other domain.
-Bundle-level free-form contractor notes belong in `notes.md` (§10), not in the
+Bundle-level free-form contractor notes belong in `notes.md` (§11), not in the
 manifest.
 
 The `survey` mapping has the following required keys:
@@ -680,7 +682,113 @@ non-superseding realizations of the same datum, those should be shipped as
 separate csemx bundles and described in `notes.md`; they are not represented as
 parallel rows in one bundle.
 
-## 10. File: `notes.md` (optional)
+## 10. File: `groups.csv` (optional)
+
+One row per membership: a transmitter or receiver **element**'s membership in a
+named group. CSV (UTF-8, RFC 4180) or Parquet, per §2; the table follows the
+same CSV and Parquet rules as every other table. Groups may represent
+acquisition lines, arrays, grids, blocks, or other producer-defined
+collections. A bundle without useful groupings omits the file.
+
+A group is identified by `(group_kind, group_id)`. Group kinds provide separate
+namespaces, so `(line, L100)` and `(array, L100)` are distinct groups.
+
+### Required columns
+
+| column         | type   | constraint                                                                 |
+| -------------- | ------ | -------------------------------------------------------------------------- |
+| `group_kind`   | string | `[A-Za-z0-9_-]{1,32}`; `line` is reserved (below)                          |
+| `group_id`     | string | `[A-Za-z0-9_-]{1,64}`                                                      |
+| `element_kind` | enum   | `tx` \| `rx`                                                               |
+| `station_id`   | string | FK to `tx.csv.tx_station_id` or `rx.csv.rx_station_id`, per `element_kind` |
+
+### Optional
+
+| column         | type    | purpose                                                                                    |
+| -------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `component_id` | string  | joint FK with `station_id`; blank applies the membership to every component at the station |
+| `sequence`     | integer | nonnegative ordering rank within an element kind; defined for `group_kind=line`            |
+| `notes`        | string  | free text about this membership; max 1024 characters (as `tx.notes`/`rx.notes`)            |
+| `ext_*`        | any     | producer-specific extension columns; not required for standard interpretation              |
+
+`(group_kind, group_id, element_kind, station_id, component_id)` is the unique
+key, where every blank `component_id` is equivalent (blank normalization).
+
+### Membership
+
+- Groups describe transmitter and receiver **element membership only**.
+- A station belongs to a group through a membership row with blank
+  `component_id`, which applies to every component at that station. A specific
+  component belongs through its `(station_id, component_id)` row. A
+  station-wide membership and a component-specific membership for the same
+  group, element kind, and station are redundant and must not both appear.
+- Membership is many-to-many: a station or component may belong to any number
+  of groups; a group may contain TX elements, RX elements, or both; TX and RX
+  elements on the same survey line may share one `group_id`.
+- Every `station_id` must resolve per `element_kind` (FK to `tx.csv` or
+  `rx.csv`). Every populated `component_id` must resolve jointly with its
+  `station_id`; an unresolved populated component is an error, not a warning.
+
+### Relationship to data
+
+Group membership is element metadata only. It does not assign a group to a data
+row and does not affect datum meaning, modeling semantics, or the data-row
+uniqueness tuple (§9). Consumers may use membership for application-specific
+selection, classification, processing, or display; this specification defines
+**no canonical mapping** from element groups to data groups. (Example consumer
+policies: select every datum whose receiver belongs to a receiver line; select
+data where both Tx and Rx belong to a chosen group; compare data connecting two
+lines; use groups only for plotting. These are consumer policies, not bundle
+semantics.) Readers may ignore the table entirely.
+
+### Kinds
+
+- `group_kind: line` is the only reserved, normatively defined kind in v1.0: a
+  named traverse of transmitter or receiver elements, not necessarily straight —
+  crooked land lines, curving tow tracks, and draped flight lines are all
+  lines. Geometry is traced by member station positions.
+- A line may contain TX only, RX only, or both. When both, the two orderings
+  are independent: `sequence` is unique within
+  `(group_kind, group_id, element_kind)`, so TX sequence 0 and RX sequence 0
+  may both occur on line `L100`.
+- `sequence` values are nonnegative integers and need not be contiguous (gaps
+  are permitted). Ordering is by ascending sort of `sequence`: values are
+  **ranks, not indices**. Provide `sequence` when order is known; leave it
+  blank when no ordering is available. A validator warns when `sequence`
+  appears on a kind other than `line`.
+- One kind is recommended, not normative: `array` — any named station
+  configuration or layout, from a four-electrode DC/MMR array to a 3D station
+  block.
+- All other kinds are producer-defined labels. Readers must preserve and pass
+  through unrecognized kinds and must not reject a bundle for an unknown
+  `group_kind`. Kinds introduce no additional processing or data-selection
+  semantics.
+
+Hierarchy is out of scope in v1.0: an element on line `1200N` and inside array
+`A1` has separate membership rows, and nesting stays implicit. Chainage is not
+a normative column; a producer-supplied designed or surveyed chainage may be
+carried in an `ext_*` column (e.g. `ext_chainage_m`) as provenance, which may
+differ from chainage derived from as-built positions.
+
+### Example
+
+```csv
+group_kind,group_id,element_kind,station_id,component_id,sequence
+line,L100,tx,T01,,0
+line,L100,tx,T02,,1
+line,L100,rx,R01,,0
+line,L100,rx,R02,,1
+line,L100,rx,R03,,2
+array,A1,rx,R01,Ex,
+array,A1,rx,R02,Ex,
+```
+
+Line `L100` contains both transmitter and receiver traverses under one survey
+line name; their sequences are independent. The `array` memberships apply only
+to the named `Ex` components. Neither group states anything about which data
+rows belong to it.
+
+## 11. File: `notes.md` (optional)
 
 Free-form contractor-authored markdown for bundle-level narrative. No schema.
 May summarize non-normative instrument provenance, processing history,
@@ -688,7 +796,7 @@ contractor QC notes, and acknowledgments, but must not carry information require
 to interpret or calibrate the data.
 Readers must not interpret its contents programmatically.
 
-## 11. Versioning
+## 12. Versioning
 
 - Spec version is the exact string `MAJOR.MINOR`, declared in `format.version`.
   The v1.0 manifest schema accepts exactly `format.version: "1.0"`.
@@ -704,7 +812,7 @@ Readers must not interpret its contents programmatically.
   verify `format.name == "csemx"` and `format.version` major matches a
   supported version.
 
-## 12. Worked Example
+## 13. Worked Example
 
 A representative bundle exercising every geometry flavor: a grounded-wire
 electric transmitter (`TX01`), a surface loop transmitter (`TX02`), a borehole
@@ -798,7 +906,7 @@ TX02,M1,001,Bz,0.125,7.80e-11,-1.40e-11,9.0e-13,8.5e-13
 BH1,M1,001,Bz,0.125,3.20e-11,-5.50e-12,4.0e-13,3.8e-13
 ```
 
-## 13. References
+## 14. References
 
 This spec is text-based and built on widely-supported standards, so conforming
 readers and writers can be assembled from existing libraries rather than
