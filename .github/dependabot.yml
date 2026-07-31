@@ -5,6 +5,9 @@ updates:
   # entry: the Python dependencies are floors-only with no lockfile, so there
   # is nothing for Dependabot to update there — new-release breakage is
   # caught by the weekly scheduled CI run instead.
+  #
+  # Patch and minor updates auto-merge once ci-ok passes (see
+  # dependabot-auto-merge.yml); major updates wait for manual review.
   - package-ecosystem: github-actions
     directory: /
     schedule:

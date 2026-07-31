@@ -66,3 +66,16 @@ jobs:
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/venv/bin/csemx" validate "$GITHUB_WORKSPACE/examples/example.csemx.zip"
           "$RUNNER_TEMP/venv/bin/csemx" inspect "$GITHUB_WORKSPACE/examples/example.csemx"
+
+  # Single stable context for branch-protection required checks and Dependabot
+  # auto-merge. Gate on this job, never on individual matrix leg names.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [tests, package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every job succeeded
+        run: |
+          test "${{ needs.tests.result }}" = "success"
+          test "${{ needs.package.result }}" = "success"

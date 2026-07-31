@@ -1,0 +1,30 @@
+name: Dependabot auto-merge
+
+# Enables GitHub auto-merge on Dependabot's patch and minor updates, so they
+# merge on their own once the required ci-ok check passes (enforced by the
+# main-branch ruleset). Major updates are left for manual review: action
+# majors are the bumps that occasionally require workflow changes, and
+# publish.yml's SHA pins deserve a human look before moving.
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch update metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a  # v2.5.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Enable auto-merge for patch and minor updates
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
