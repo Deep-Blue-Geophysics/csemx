@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use csemx or deliver data in the format, please cite it as below."
+title: "csemx: an open exchange format for frequency-domain controlled-source electromagnetic data"
+type: software
+authors:
+  - family-names: James
+    given-names: Alexander
+    email: alexkjames@deepbluegeophysics.com
+    affiliation: Deep Blue Geophysics
+version: 0.1.0
+date-released: "2026-07-31"
+repository-code: "https://github.com/Deep-Blue-Geophysics/csemx"
+url: "https://deep-blue-geophysics.github.io/csemx/"
+license: MIT
+keywords:
+  - CSEM
+  - controlled-source electromagnetics
+  - geophysics
+  - electromagnetics
+  - data format
