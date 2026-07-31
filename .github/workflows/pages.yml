@@ -27,6 +27,8 @@ jobs:
       - name: Assemble documents into site source
         run: |
           cp csemx-specification.md csemx-rationale.md web/
+          mkdir -p web/docs
+          cp docs/quickstart.md web/docs/quickstart.md
           mkdir -p web/examples
           cp examples/README.md web/examples/README.md
 

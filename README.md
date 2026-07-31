@@ -50,6 +50,8 @@ for a post-v1.0 revision (see the roadmap note in
 
 ## Documents
 
+- [`docs/quickstart.md`](docs/quickstart.md) — plain-language quickstart for
+  new producers; start here if you are assembling your first bundle.
 - [`csemx-specification.md`](csemx-specification.md) — normative draft
   specification.
 - [`csemx-rationale.md`](csemx-rationale.md) — design rationale and tradeoffs.
