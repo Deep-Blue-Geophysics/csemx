@@ -12,6 +12,13 @@ is `v0.1.1` (format unchanged); a format change is `v0.2.0`. The invariant is
 beta a package accepts only its own format version; from 1.0 on it accepts
 any same-major bundle at or below its minor (spec §12).
 
+## Dependency updates
+
+Dependabot proposes GitHub Actions updates weekly. Patch and minor updates
+auto-merge once the `ci-ok` check passes; major updates wait for manual
+review. A `main`-branch ruleset requires `ci-ok` for pull requests;
+repository admins bypass it, so direct pushes to `main` are unaffected.
+
 ## One-time setup (before the first publish)
 
 1. **PyPI Trusted Publishing** — on pypi.org, add a "pending publisher" for
