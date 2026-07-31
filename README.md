@@ -69,10 +69,11 @@ A delivered bundle is a `.csemx.zip` archive containing one top-level directory:
 ├── rx.csv | rx.parquet
 ├── rx_vertices.csv | rx_vertices.parquet
 ├── data.csv | data.parquet
+├── groups.csv | groups.parquet           # optional
 └── notes.md                              # optional; all other files required
 ```
 
-Each required table is supplied exactly once, either as CSV or Parquet. The
+Each table is supplied exactly once, either as CSV or Parquet. The
 specification defines the required columns, geometry conventions, units,
 normalization, and validation rules.
 
