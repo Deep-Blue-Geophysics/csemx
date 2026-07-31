@@ -951,5 +951,128 @@ class GroupsTableTests(unittest.TestCase):
         )
 
 
+class DcFrequencyTests(unittest.TestCase):
+    def copy_example(self):
+        tempdir = tempfile.TemporaryDirectory()
+        bundle = Path(tempdir.name) / "example.csemx"
+        shutil.copytree(EXAMPLE, bundle)
+        self.addCleanup(tempdir.cleanup)
+        return bundle
+
+    def validate_bundle(self, bundle):
+        return validate_csemx.validate(bundle, SCHEMA)
+
+    def append_data_row(self, bundle, row):
+        data = bundle / "data.csv"
+        text = data.read_text(encoding="utf-8")
+        if not text.endswith("\n"):
+            text += "\n"
+        data.write_text(text + row + "\n", encoding="utf-8")
+
+    def declare_secondary(self, bundle):
+        manifest = bundle / "manifest.yaml"
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8") + "\nfield:\n  content: secondary\n",
+            encoding="utf-8",
+        )
+
+    def test_present_dc_row_with_zero_imag_is_accepted(self):
+        # Mixed DC/AC bundle with field.content omitted (default: total).
+        bundle = self.copy_example()
+        self.append_data_row(bundle, "TX01,E1,001,Ex,0,3.1e-3,0,4.0e-5,0")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+
+    def test_present_dc_row_with_nonzero_imag_is_rejected(self):
+        bundle = self.copy_example()
+        self.append_data_row(bundle, "TX01,E1,001,Ex,0,3.1e-3,1e-9,4.0e-5,0")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("present DC datum (frequency = 0) requires imag = 0" in error for error in errors),
+            errors,
+        )
+
+    def test_present_dc_row_with_nonzero_err_imag_is_rejected(self):
+        bundle = self.copy_example()
+        self.append_data_row(bundle, "TX01,E1,001,Ex,0,3.1e-3,0,4.0e-5,1e-9")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any(
+                "present DC datum (frequency = 0) requires err_imag = 0" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_missing_dc_row_follows_all_nan_rule(self):
+        bundle = self.copy_example()
+        self.append_data_row(bundle, "TX01,E1,001,Ex,0,NaN,NaN,NaN,NaN")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+
+    def test_negative_zero_frequency_is_treated_as_dc(self):
+        bundle = self.copy_example()
+        self.append_data_row(bundle, "TX01,E1,001,Ex,-0.0,3.1e-3,1e-9,4.0e-5,0")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("present DC datum (frequency = 0) requires imag = 0" in error for error in errors),
+            errors,
+        )
+
+    def test_negative_zero_imag_counts_as_zero(self):
+        bundle = self.copy_example()
+        self.append_data_row(bundle, "TX01,E1,001,Ex,0,3.1e-3,-0.0,4.0e-5,-0.0")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+
+    def test_negative_frequency_is_rejected(self):
+        bundle = self.copy_example()
+        self.append_data_row(bundle, "TX01,E1,001,Ex,-1.0,3.1e-3,0,4.0e-5,0")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("frequency must be >= 0" in error for error in errors), errors
+        )
+
+    def test_dc_row_with_secondary_field_content_is_rejected(self):
+        bundle = self.copy_example()
+        self.declare_secondary(bundle)
+        self.append_data_row(bundle, "TX01,E1,001,Ex,0,3.1e-3,0,4.0e-5,0")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any(
+                "field.content must not be secondary when data contains frequency = 0" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_secondary_without_dc_rows_remains_accepted(self):
+        bundle = self.copy_example()
+        self.declare_secondary(bundle)
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+
+    def test_mixed_dc_ac_with_explicit_total_content_is_accepted(self):
+        bundle = self.copy_example()
+        manifest = bundle / "manifest.yaml"
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8") + "\nfield:\n  content: total\n",
+            encoding="utf-8",
+        )
+        self.append_data_row(bundle, "TX01,E1,001,Ex,0,3.1e-3,0,4.0e-5,0")
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+
+
 if __name__ == "__main__":
     unittest.main()

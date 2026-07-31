@@ -239,6 +239,9 @@ current reference before writing the bundle. Beyond this current-reference
 conversion, no propagation-time correction or additional timing convention is
 represented in the bundle.
 
+Neither convention affects a DC row (`frequency = 0`, §3.12), whose present
+response is purely real.
+
 ### 3.6 Units and the Measured Datum
 
 Each `data` table row carries a complex **response**: the receiver's measured
@@ -417,7 +420,53 @@ response as `total = secondary + primary`, with `primary` computed as above. ppm
 is not stored; if needed for display or comparison with legacy FDEM deliveries,
 it is derived outside the csemx datum.
 
-`field.content` applies to the whole bundle.
+`field.content` applies to the whole bundle. It must not be `secondary` when
+any data row has `frequency = 0`: the free-space secondary-field convention is
+not defined at DC in v1.0 (§3.12).
+
+### 3.12 DC and Static-Limit Data
+
+A data-row `frequency` of exactly `0` denotes a **DC or non-inductive
+static-limit response**, so DC resistivity and magnetometric resistivity (MMR)
+data are represented without an artificial nonzero frequency. `frequency = 0`
+must not be used as a placeholder for an unknown frequency. `-0.0`, if
+encountered during numeric parsing, is equivalent to `0.0`; writers should emit
+canonical `0`.
+
+For a **present** data row with `frequency = 0` (§9):
+
+- The time-dependence and phase convention of §3.5 has no effect.
+- `imag = 0` and `err_imag = 0` are required. `real` carries the signed DC
+  response and `err_real` its nonnegative absolute uncertainty.
+- Normalization is by the **signed** DC transmitter current — the DC analogue
+  of dividing by the complex current phasor (§3.7) — never by `|I|`.
+- The response unit remains the unit fixed by the receiver geometry (§3.6):
+  `V/A` for a wire receiver, `T/A` for a point magnetic receiver.
+
+A **missing** DC datum follows the unchanged all-or-nothing rule of §9:
+`real`, `imag`, `err_real`, and `err_imag` are all `NaN`. The
+`imag = 0`/`err_imag = 0` requirement applies only to present DC data.
+
+**Field content.** DC data is supported only for total-field bundles. If any
+data row has `frequency = 0`, the manifest must not declare
+`field.content: secondary` (§3.11). A bundle containing both DC and
+nonzero-frequency rows is permitted when `field.content` is `total` or omitted
+under the existing default.
+
+**Geometry and polarity.** DC transmitter and receiver geometry uses the
+existing element definitions and vertex-order conventions (§3.4). For a wire
+transmitter, the ordered endpoints define the signed source orientation and
+electrode polarity. For a wire receiver, the datum follows the first-to-last
+convention: V(first) − V(last). For an MMR point receiver, the datum is the
+magnetic flux-density component along the receiver's directed positive axis,
+normalized by transmitter current. Group or array labels (§10) may organize DC
+elements but do not alter the physical meaning or polarity of a datum.
+
+**Apparent resistivity** is a derived display/interpretation quantity: it
+depends on array geometry and interpretation convention, and consumers derive
+it from the encoded transmitter geometry, receiver geometry, and response. It
+must not replace the canonical `V/A` or `T/A` response in `real`; a producer
+may include it as an `ext_*` column for convenience.
 
 ## 4. File: `manifest.yaml`
 
@@ -636,7 +685,7 @@ One row per measurement. CSV (UTF-8, RFC 4180) or Parquet, per §2.
 | `tx_component_id` | string | FK (joint with `tx_station_id`)    |
 | `rx_station_id`   | string | FK to `rx.csv.rx_station_id`       |
 | `rx_component_id` | string | FK (joint with `rx_station_id`)    |
-| `frequency`       | float  | `> 0`; in Hz                       |
+| `frequency`       | float  | `>= 0`, finite; in Hz; `0` = DC / static limit (§3.12) |
 | `real`            | float  | real part of complex response      |
 | `imag`            | float  | imaginary part of complex response |
 | `err_real`        | float  | absolute error on real part; `≥ 0` |
@@ -662,6 +711,9 @@ result; consumers may skip it). One present and the other `NaN` is invalid.
 **Errors follow the datum**: a present datum requires finite `err_real`/`err_imag`
 (`≥ 0`); a missing datum requires `NaN` in `err_real`/`err_imag` too. A finite or
 zero error on a missing datum is invalid.
+
+A present datum in a row with `frequency = 0` must additionally have `imag = 0`
+and `err_imag = 0` (§3.12); a missing DC datum is all-`NaN` like any other.
 
 A present datum the producer considers unreliable but must still deliver (e.g.
 contractual completeness) is marked `use = 0`, not omitted, and not given an

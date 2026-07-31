@@ -970,6 +970,8 @@ def validate_vertex_counts(grouped, parent_rows, label, errors, warnings):
 
 
 def validate_data_row(row, row_label, tx_keys, rx_keys, errors):
+    """Validate one data row; returns True when the row is DC (frequency = 0)."""
+
     validate_ids(row, row_label, ("tx_station_id", "tx_component_id", "rx_station_id", "rx_component_id"), errors)
     tx_key = (row.get("tx_station_id"), row.get("tx_component_id"))
     rx_key = (row.get("rx_station_id"), row.get("rx_component_id"))
@@ -979,8 +981,10 @@ def validate_data_row(row, row_label, tx_keys, rx_keys, errors):
         errors.append(f"{row_label}: unresolved rx key {rx_key}")
 
     frequency = parse_float_cell(row.get("frequency"), f"{row_label}:frequency", errors)
-    if frequency is not None and frequency <= 0:
-        errors.append(f"{row_label}: frequency must be > 0")
+    if frequency is not None and frequency < 0:
+        errors.append(f"{row_label}: frequency must be >= 0")
+    # -0.0 parses to a float that compares equal to 0.0, so it is DC (§3.12).
+    is_dc = frequency is not None and frequency == 0
 
     tx_fundamental = row.get("tx_fundamental", "")
     if not is_blank(tx_fundamental):
@@ -999,7 +1003,7 @@ def validate_data_row(row, row_label, tx_keys, rx_keys, errors):
         for name in ("real", "imag", "err_real", "err_imag")
     }
     if any(value is None for value in values.values()):
-        return
+        return is_dc
 
     datum_missing = math.isnan(values["real"]) and math.isnan(values["imag"])
     datum_mixed = math.isnan(values["real"]) != math.isnan(values["imag"])
@@ -1015,6 +1019,18 @@ def validate_data_row(row, row_label, tx_keys, rx_keys, errors):
             errors.append(f"{row_label}: present datum requires finite errors")
         elif values["err_real"] < 0 or values["err_imag"] < 0:
             errors.append(f"{row_label}: errors must be >= 0")
+        if is_dc:
+            # §3.12: a present DC datum is purely real (±0.0 both count as 0).
+            if values["imag"] != 0:
+                errors.append(
+                    f"{row_label}: present DC datum (frequency = 0) requires imag = 0"
+                )
+            if not math.isnan(values["err_imag"]) and values["err_imag"] != 0:
+                errors.append(
+                    f"{row_label}: present DC datum (frequency = 0) requires err_imag = 0"
+                )
+
+    return is_dc
 
 
 def validate_groups(table, schema, tx_keys, rx_keys, errors, warnings):
@@ -1219,8 +1235,20 @@ def validate(
         rx_vertices, rx_by_key, tables["rx_vertices"]["filename"], errors, warnings
     )
 
+    has_dc = False
     for i, row in enumerate(tables["data"]["rows"], start=2):
-        validate_data_row(row, f"{tables['data']['filename']}:{i}", tx_keys, rx_keys, errors)
+        if validate_data_row(row, f"{tables['data']['filename']}:{i}", tx_keys, rx_keys, errors):
+            has_dc = True
+
+    if has_dc:
+        field = manifest.get("field")
+        content = field.get("content") if isinstance(field, dict) else None
+        if content == "secondary":
+            errors.append(
+                "manifest field.content must not be secondary when data contains "
+                "frequency = 0 rows; the secondary-field convention is not defined "
+                "at DC (§3.12)"
+            )
 
     if "groups" in tables:
         validate_groups(tables["groups"], schema, tx_keys, rx_keys, errors, warnings)

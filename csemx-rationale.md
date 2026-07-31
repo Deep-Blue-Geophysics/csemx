@@ -295,6 +295,27 @@ datums: the primary is real for a `point` B-field datum but quadrature for a
 fixed-offset loop-loop FDEM (ground and airborne), so the profile is scoped by
 the *measurement* (a removed primary), not by platform.
 
+## §3.12 DC and static-limit data
+
+**Why `frequency = 0` instead of a small placeholder frequency.** DC
+resistivity and MMR deliveries squeezed into frequency-domain formats have
+traditionally invented an artificial low frequency, which corrupts the datum's
+meaning: a modeling code then simulates induction at the placeholder frequency
+instead of the static limit. Zero is the physically correct coordinate for the
+static limit, and the §9 uniqueness and all-or-nothing machinery carries over
+unchanged. Requiring `imag = 0`/`err_imag = 0` (rather than blank) keeps
+present DC rows shaped exactly like AC rows, so consumers need no schema
+switch; a zero imaginary part is also the physically true value, not a
+sentinel.
+
+**Signed current, no apparent resistivity.** Normalizing by the signed DC
+current is the static limit of the complex-phasor normalization (§3.7), so the
+polarity conventions of §3.4 survive at DC; dividing by `|I|` would silently
+drop source polarity. Apparent resistivity stays out of the datum because it
+bakes an array-geometry convention into the value and those conventions differ
+between traditions; the encoded geometry lets any consumer derive its preferred
+form, and `ext_*` carries a producer's convenience copy.
+
 ## §4 Manifest, survey identity, and re-ships
 
 **Survey identity and re-ships.** Re-ship lineage is the tuple
@@ -403,8 +424,6 @@ Deliberately deferred:
   gates, waveforms, turn-off ramps, or time-zero conventions.
 - **Natural-source EM (MT/AMT).** csemx is controlled-source only; natural-source
   deliverables remain separate.
-- **Static/DC data.** `frequency = 0` is not a placeholder for DC resistivity or
-  static-limit data; v1.0 data rows require `frequency > 0`.
 - **Environmental / medium properties.** Seawater conductivity, CTD profiles,
   borehole fluids, bathymetry, and earth models are modeling inputs, not csemx
   response data.
