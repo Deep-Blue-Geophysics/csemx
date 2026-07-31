@@ -39,6 +39,15 @@ elements at arbitrary `(easting, northing, elev)`, one data model covers surface
 CSEM, marine towed-dipole, borehole induction logging, and crosswell EM alike:
 these differ only in where the vertices sit, not in the schema.
 
+### Reading guide (non-normative)
+
+Producers creating a bundle should begin with the plain-language
+[quickstart](docs/quickstart.md), the table definitions (§5–§10), and the
+worked example (§13). The global conventions (§3) are essential reference
+material, but they are primarily written to make reader, writer, and validator
+implementations unambiguous. This guidance does not weaken or replace any
+normative requirement.
+
 ## 2. Bundle Structure
 
 A csemx bundle is a ZIP archive containing a single top-level
