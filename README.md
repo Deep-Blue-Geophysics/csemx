@@ -43,6 +43,11 @@ of scope.
 Pre-circulation draft. The format is open for technical review and is not frozen
 as v1.0.
 
+v1.0 is frequency-domain only. Time-domain electromagnetic data is the priority
+for a post-v1.0 revision (see the roadmap note in
+[`csemx-rationale.md`](csemx-rationale.md)); v1.0 readers reject any
+`domain` other than `frequency`.
+
 ## Documents
 
 - [`csemx-specification.md`](csemx-specification.md) — normative draft

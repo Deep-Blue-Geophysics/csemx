@@ -443,8 +443,13 @@ keeps a bundle self-describing on units without a manifest units block.
 
 Deliberately deferred:
 
-- **Time-domain (TDEM/TEM).** v1.0 is frequency-domain only and does not define
-  gates, waveforms, turn-off ramps, or time-zero conventions.
+- **Time-domain (TDEM/TEM) — the post-v1.0 priority.** Time-domain
+  electromagnetic data is a priority for a post-v1.0 csemx revision. The
+  time-domain model will be developed and tested using real datasets, and must
+  define time-gate bounds and averaging, waveform and ramp representation,
+  time-reference conventions, the response quantity, and current
+  normalization. csemx v1.0 defines only `domain: frequency`; readers must
+  reject unsupported `domain` values (spec §4, §12).
 - **Natural-source EM (MT/AMT).** csemx is controlled-source only; natural-source
   deliverables remain separate.
 - **Environmental / medium properties.** Seawater conductivity, CTD profiles,
