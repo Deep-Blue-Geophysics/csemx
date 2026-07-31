@@ -1,4 +1,8 @@
-PyYAML
-jsonschema
-pyproj
-pyarrow
+# Optional dependencies for full conformance validation (csemx validate --full).
+# Floors match the `full` extra in python/pyproject.toml: the oldest versions
+# the test suite has been verified against. No upper caps — the weekly CI run
+# catches new-release breakage.
+PyYAML>=6.0
+jsonschema>=4.0.1
+pyproj>=3.3.1
+pyarrow>=9.0.0

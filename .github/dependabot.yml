@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Keeps workflow action references current: major-tag bumps in ci.yml and
+  # SHA pins (with their version comments) in publish.yml. There is no pip
+  # entry: the Python dependencies are floors-only with no lockfile, so there
+  # is nothing for Dependabot to update there — new-release breakage is
+  # caught by the weekly scheduled CI run instead.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday

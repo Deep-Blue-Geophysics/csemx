@@ -36,12 +36,16 @@ classifiers = [
 ]
 dependencies = []
 
+# Floors are the oldest versions the suite has been verified against
+# (Python 3.9); there are deliberately no upper caps — new-release breakage
+# is caught by the weekly scheduled CI run instead. pyarrow < 9 crashes at
+# interpreter shutdown on macOS arm64.
 [project.optional-dependencies]
 full = [
-  "PyYAML",
-  "jsonschema",
-  "pyproj",
-  "pyarrow"
+  "PyYAML>=6.0",
+  "jsonschema>=4.0.1",
+  "pyproj>=3.3.1",
+  "pyarrow>=9.0.0"
 ]
 
 [project.urls]

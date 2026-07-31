@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # The full-validation dependencies are deliberately unpinned (see
+    # RELEASING.md); this weekly run catches breakage from new dependency or
+    # Python releases while the repository is quiet.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 jobs:
   tests:
