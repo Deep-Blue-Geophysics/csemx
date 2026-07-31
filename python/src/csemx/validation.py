@@ -66,6 +66,11 @@ ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 ACQUIRED_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 ACQUIRED_UTC_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+# §3.13 time_utc: the §4 UTC grammar extended with optional 1-9 fractional
+# digits and a leap-second seconds field.
+TIME_UTC_RE = re.compile(
+    r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?Z"
+)
 # Non-exhaustive offline fast-path: common geographic CRS codes rejected for
 # epsg_horizontal without pyproj. NOT a complete list of geographic CRSs — the
 # authoritative projected-vs-geographic check is crs.is_projected (pyproj, used
@@ -94,6 +99,7 @@ PARQUET_STRING_COLUMNS = {
     "element_kind",
     "station_id",
     "component_id",
+    "time_utc",
 }
 PARQUET_INTEGER_COLUMNS = {
     "vertex_index",
@@ -114,6 +120,14 @@ PARQUET_FLOAT_COLUMNS = {
     "err_real",
     "err_imag",
     "tx_fundamental",
+    "nav_heading_deg",
+    "nav_pitch_deg",
+    "nav_roll_deg",
+    "nav_heading_sd_deg",
+    "nav_pitch_sd_deg",
+    "nav_roll_sd_deg",
+    "nav_pos_sd_m",
+    "nav_elev_sd_m",
 }
 
 # Acquisition endpoints are quoted strings in the manifest, so the standard
@@ -813,6 +827,89 @@ def validate_point_columns(label, row, is_tx, errors):
         errors.append(f"{label}: point_moment_area_m2 is only valid for point TX")
 
 
+def validate_time_utc(value, label, errors):
+    if not isinstance(value, str):
+        errors.append(f"{label}: must be a string in YYYY-MM-DDTHH:MM:SS[.f]Z form")
+        return
+    match = TIME_UTC_RE.fullmatch(value)
+    if match is None:
+        errors.append(
+            f"{label}: invalid value {value!r}; must be "
+            "YYYY-MM-DDTHH:MM:SS[.fffffffff]Z (1-9 fractional digits, trailing Z, "
+            "no numeric UTC offset)"
+        )
+        return
+    year, month, day, hour, minute, second = (int(match.group(i)) for i in range(1, 7))
+    try:
+        date(year, month, day)
+    except ValueError as exc:
+        errors.append(f"{label}: invalid calendar date in {value!r}: {exc}")
+        return
+    if hour > 23 or minute > 59:
+        errors.append(f"{label}: invalid UTC clock time in {value!r}")
+        return
+    if second > 60:
+        errors.append(f"{label}: invalid seconds field in {value!r}")
+        return
+    if second == 60 and not (hour == 23 and minute == 59):
+        errors.append(
+            f"{label}: leap second in {value!r} is only valid at 23:59:60Z"
+        )
+
+
+NAV_ATTITUDE_RANGES = {
+    # column -> (low, high, low_inclusive, high_inclusive, description)
+    "nav_heading_deg": (0.0, 360.0, True, False, "in [0, 360)"),
+    "nav_pitch_deg": (-90.0, 90.0, True, True, "in [-90, 90]"),
+    "nav_roll_deg": (-180.0, 180.0, False, True, "in (-180, 180]"),
+}
+NAV_UNCERTAINTY_COLUMNS = (
+    "nav_heading_sd_deg",
+    "nav_pitch_sd_deg",
+    "nav_roll_sd_deg",
+    "nav_pos_sd_m",
+    "nav_elev_sd_m",
+)
+# Attitude uncertainties whose value column should accompany them; the position
+# uncertainties qualify the vertices instead and may appear alone (§3.13).
+NAV_UNCERTAINTY_VALUE_COLUMNS = {
+    "nav_heading_sd_deg": "nav_heading_deg",
+    "nav_pitch_sd_deg": "nav_pitch_deg",
+    "nav_roll_sd_deg": "nav_roll_deg",
+}
+
+
+def validate_nav_columns(row, row_label, errors, warnings):
+    for column, (low, high, low_inc, high_inc, description) in NAV_ATTITUDE_RANGES.items():
+        value = row.get(column, "")
+        if is_blank(value):
+            continue
+        parsed = parse_float_cell(value, f"{row_label}:{column}", errors)
+        if parsed is None:
+            continue
+        above_low = parsed >= low if low_inc else parsed > low
+        below_high = parsed <= high if high_inc else parsed < high
+        if not (above_low and below_high):
+            errors.append(f"{row_label}: {column} must be {description}")
+
+    for column in NAV_UNCERTAINTY_COLUMNS:
+        value = row.get(column, "")
+        if is_blank(value):
+            continue
+        parsed = parse_float_cell(value, f"{row_label}:{column}", errors)
+        if parsed is not None and parsed < 0:
+            errors.append(f"{row_label}: {column} must be >= 0")
+        value_column = NAV_UNCERTAINTY_VALUE_COLUMNS.get(column)
+        if value_column is not None and is_blank(row.get(value_column, "")):
+            warnings.append(
+                f"{row_label}: {column} is populated but {value_column} is blank"
+            )
+
+    time_utc = row.get("time_utc", "")
+    if not is_blank(time_utc):
+        validate_time_utc(time_utc, f"{row_label}:time_utc", errors)
+
+
 def group_vertices(rows, key_columns, valid_keys, label, errors):
     grouped = {}
     for i, row in enumerate(rows, start=2):
@@ -1197,6 +1294,7 @@ def validate(
             errors.append(f"{row_label}: geometry_type is invalid")
         validate_notes(row, row_label, errors)
         validate_point_columns(row_label, row, is_tx=True, errors=errors)
+        validate_nav_columns(row, row_label, errors, warnings)
 
     for i, row in enumerate(rx_rows, start=2):
         row_label = f"{tables['rx']['filename']}:{i}"
@@ -1213,6 +1311,7 @@ def validate(
                     f"{row_label}: canonical component {component} must use geometry_type={required_geometry}"
                 )
         validate_notes(row, row_label, errors)
+        validate_nav_columns(row, row_label, errors, warnings)
 
     tx_vertices = group_vertices(
         tables["tx_vertices"]["rows"],

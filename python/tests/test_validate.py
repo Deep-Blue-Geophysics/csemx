@@ -1074,5 +1074,196 @@ class DcFrequencyTests(unittest.TestCase):
         self.assertEqual([], errors)
 
 
+NAV_VALUE_COLUMNS = ("nav_heading_deg", "nav_pitch_deg", "nav_roll_deg")
+
+
+class NavTimeTests(unittest.TestCase):
+    def copy_example(self):
+        tempdir = tempfile.TemporaryDirectory()
+        bundle = Path(tempdir.name) / "example.csemx"
+        shutil.copytree(EXAMPLE, bundle)
+        self.addCleanup(tempdir.cleanup)
+        return bundle
+
+    def validate_bundle(self, bundle):
+        return validate_csemx.validate(bundle, SCHEMA)
+
+    def append_rx_columns(self, bundle, columns, first_row_values):
+        """Add optional columns to rx.csv, populated on the first row only.
+
+        The remaining rows keep the columns blank, so every bundle these tests
+        build is also a fixed/moving blank-mixture bundle.
+        """
+
+        path = bundle / "rx.csv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        lines[0] += "," + ",".join(columns)
+        lines[1] += "," + ",".join(first_row_values)
+        for i in range(2, len(lines)):
+            lines[i] += "," * len(columns)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_attitude_range_boundaries_are_accepted(self):
+        for values in (("0", "-90", "180"), ("359.999", "90", "-179.999")):
+            with self.subTest(values=values):
+                bundle = self.copy_example()
+                self.append_rx_columns(bundle, NAV_VALUE_COLUMNS, values)
+
+                errors, warnings = self.validate_bundle(bundle)
+                self.assertEqual([], errors)
+                self.assertEqual([], bundle_warnings(warnings))
+
+    def test_attitude_out_of_range_values_are_rejected(self):
+        cases = [
+            (("360", "0", "0"), "nav_heading_deg must be in [0, 360)"),
+            (("-0.1", "0", "0"), "nav_heading_deg must be in [0, 360)"),
+            (("0", "90.5", "0"), "nav_pitch_deg must be in [-90, 90]"),
+            (("0", "0", "-180"), "nav_roll_deg must be in (-180, 180]"),
+            (("0", "0", "180.001"), "nav_roll_deg must be in (-180, 180]"),
+        ]
+        for values, expected in cases:
+            with self.subTest(expected=expected):
+                bundle = self.copy_example()
+                self.append_rx_columns(bundle, NAV_VALUE_COLUMNS, values)
+
+                errors, _warnings = self.validate_bundle(bundle)
+                self.assertTrue(any(expected in error for error in errors), errors)
+
+    def test_negative_uncertainty_is_rejected(self):
+        bundle = self.copy_example()
+        self.append_rx_columns(
+            bundle, ("nav_heading_deg", "nav_heading_sd_deg"), ("10", "-0.5")
+        )
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("nav_heading_sd_deg must be >= 0" in error for error in errors), errors
+        )
+
+    def test_attitude_uncertainty_without_value_warns(self):
+        bundle = self.copy_example()
+        self.append_rx_columns(bundle, ("nav_pitch_sd_deg",), ("0.3",))
+
+        errors, warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+        self.assertTrue(
+            any(
+                "nav_pitch_sd_deg is populated but nav_pitch_deg is blank" in warning
+                for warning in warnings
+            ),
+            warnings,
+        )
+
+    def test_position_uncertainties_may_appear_alone(self):
+        bundle = self.copy_example()
+        self.append_rx_columns(bundle, ("nav_pos_sd_m", "nav_elev_sd_m"), ("1.5", "2.0"))
+
+        errors, warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+        self.assertEqual([], bundle_warnings(warnings))
+
+    def test_valid_time_utc_forms_are_accepted(self):
+        valid = [
+            "2026-04-17T20:31:42Z",
+            "2026-04-17T20:31:42.1Z",
+            "2026-04-17T20:31:42.125734912Z",
+            "2016-12-31T23:59:60Z",
+            "2016-12-31T23:59:60.5Z",
+        ]
+        for value in valid:
+            with self.subTest(value=value):
+                bundle = self.copy_example()
+                self.append_rx_columns(bundle, ("time_utc",), (value,))
+
+                errors, warnings = self.validate_bundle(bundle)
+                self.assertEqual([], errors)
+                self.assertEqual([], bundle_warnings(warnings))
+
+    def test_invalid_time_utc_forms_are_rejected(self):
+        invalid = [
+            "2026-04-17T20:31:42.1234567891Z",  # 10 fractional digits
+            "2026-04-17T20:31:42.Z",  # empty fractional part
+            "2026-04-17T20:31:42+00:00",  # numeric offset instead of Z
+            "2026-04-17T20:31:42",  # missing Z
+            "2026-04-17 20:31:42Z",  # space separator
+            "2026-02-30T20:31:42Z",  # invalid calendar date
+            "2026-04-17T24:00:00Z",  # invalid clock time
+            "2026-04-17T12:15:60Z",  # leap second away from 23:59:60
+        ]
+        for value in invalid:
+            with self.subTest(value=value):
+                bundle = self.copy_example()
+                self.append_rx_columns(bundle, ("time_utc",), (value,))
+
+                errors, _warnings = self.validate_bundle(bundle)
+                self.assertTrue(
+                    any(":time_utc:" in error for error in errors), (value, errors)
+                )
+
+    def test_nav_columns_are_accepted_on_tx_too(self):
+        bundle = self.copy_example()
+        path = bundle / "tx.csv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        lines[0] += ",nav_heading_deg,time_utc"
+        lines[1] += ",271.25,2026-05-01T15:02:11.125Z"
+        for i in range(2, len(lines)):
+            lines[i] += ",,"
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        errors, warnings = self.validate_bundle(bundle)
+        self.assertEqual([], errors)
+        self.assertEqual([], bundle_warnings(warnings))
+
+    def test_time_utc_round_trips_as_string(self):
+        bundle = csemx.read(AIRBORNE_HEM)
+        value = bundle.tables["rx"].rows[0]["time_utc"]
+        self.assertIsInstance(value, str)
+        self.assertEqual("2026-05-20T16:04:12.25Z", value)
+
+        target = Path(tempfile.mkdtemp()) / "nav_roundtrip.csemx"
+        csemx.write(bundle, target)
+        reread = csemx.read(target)
+        self.assertEqual(
+            "2026-05-20T16:04:12.25Z", reread.tables["rx"].rows[0]["time_utc"]
+        )
+
+        errors, _warnings = csemx.validate(target)
+        self.assertEqual([], errors)
+
+    @unittest.skipIf(pa is None or pq is None, "pyarrow is not installed")
+    def test_parquet_float_typed_time_utc_is_rejected(self):
+        bundle = self.copy_example()
+        with (bundle / "rx.csv").open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+
+        def strings(name):
+            return pa.array([row[name] for row in rows], type=pa.string())
+
+        def floats(name):
+            return pa.array(
+                [float(row[name]) if row[name] else None for row in rows],
+                type=pa.float64(),
+            )
+
+        table = pa.table(
+            {
+                "rx_station_id": strings("rx_station_id"),
+                "rx_component_id": strings("rx_component_id"),
+                "geometry_type": strings("geometry_type"),
+                "azimuth_deg": floats("azimuth_deg"),
+                "dip_deg": floats("dip_deg"),
+                "time_utc": pa.array([1.7e9] * len(rows), type=pa.float64()),
+            }
+        )
+        pq.write_table(table, bundle / "rx.parquet")
+        (bundle / "rx.csv").unlink()
+
+        errors, _warnings = self.validate_bundle(bundle)
+        self.assertTrue(
+            any("column 'time_utc' must be a Parquet string" in error for error in errors),
+            errors,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

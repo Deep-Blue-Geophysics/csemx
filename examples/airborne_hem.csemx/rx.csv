@@ -1,7 +1,7 @@
-rx_station_id,rx_component_id,geometry_type,azimuth_deg,dip_deg
-RXP1,Bcp,point,0,90
-RXP1,Bca,point,90,0
-RXP2,Bcp,point,0,90
-RXP2,Bca,point,90,0
-RXP3,Bcp,point,0,90
-RXP3,Bca,point,90,0
+rx_station_id,rx_component_id,geometry_type,azimuth_deg,dip_deg,nav_heading_deg,nav_pitch_deg,nav_roll_deg,nav_heading_sd_deg,nav_pitch_sd_deg,nav_roll_sd_deg,nav_pos_sd_m,nav_elev_sd_m,time_utc
+RXP1,Bcp,point,0,90,89.6,2.1,-1.4,0.5,0.3,0.3,0.9,1.2,2026-05-20T16:04:12.25Z
+RXP1,Bca,point,90,0,89.6,2.1,-1.4,0.5,0.3,0.3,0.9,1.2,2026-05-20T16:04:12.25Z
+RXP2,Bcp,point,0,90,90.4,1.8,0.6,0.5,0.3,0.3,0.8,1.1,2026-05-20T16:04:14.05Z
+RXP2,Bca,point,90,0,90.4,1.8,0.6,0.5,0.3,0.3,0.8,1.1,2026-05-20T16:04:14.05Z
+RXP3,Bcp,point,0,90,90.1,2.4,-0.3,0.5,0.3,0.3,0.8,1.1,2026-05-20T16:04:15.85Z
+RXP3,Bca,point,90,0,90.1,2.4,-0.3,0.5,0.3,0.3,0.8,1.1,2026-05-20T16:04:15.85Z

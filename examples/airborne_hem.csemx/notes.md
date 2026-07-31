@@ -15,7 +15,12 @@ Demonstrates:
   B-field per amp, the free-space primary removed (§3.11),
 - independent continuous sinusoidal transmitter frequencies, so `tx_fundamental`
   is omitted,
-- a `use = 0` flag on a noisy high-frequency datum.
+- a `use = 0` flag on a noisy high-frequency datum,
+- advisory navigation/attitude metadata (§3.13): platform
+  heading/pitch/roll with one-sigma uncertainties, position/elevation
+  uncertainties, and sub-second `time_utc` per bird position; the two
+  components at each station share one platform observation, so their
+  navigation values are identical.
 
 Secondary field. Airborne FDEM is often reported as **ppm**
 (secondary-over-primary), but this bundle keeps the canonical `T/A` unit and

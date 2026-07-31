@@ -316,6 +316,29 @@ bakes an array-geometry convention into the value and those conventions differ
 between traditions; the encoded geometry lets any consumer derive its preferred
 form, and `ext_*` carries a producer's convenience copy.
 
+## §3.13 Navigation, attitude, and time
+
+**Advisory, never geometric.** Moving-platform reviewers wanted QA/QC context
+(bird swing, platform inversion, position discontinuities, elevated navigation
+uncertainty) without reopening the core principle that the delivered vertices
+and `azimuth_deg`/`dip_deg` are the modeling geometry. Storing navigation as
+advisory per-element metadata keeps one authoritative geometry and makes
+"reader recomputes positions from nav" explicitly non-conforming; a deliberate
+reprocessing writes a revised bundle instead of mutating meaning in place.
+
+**One-sigma scalars, not covariance.** Full navigation solutions — covariance
+matrices, lever arms, IMU streams — belong to acquisition processing, and
+consumers of a final delivery filter on scalar summaries, not on covariances.
+Producers reporting at other confidence levels convert to one sigma once, at
+write time, rather than every consumer guessing the convention.
+
+**String timestamps.** `time_utc` extends the §4 grammar with fractional
+seconds instead of adopting a float epoch: a float64 epoch second resolves
+only ~0.5 µs in the current era, silently truncating modern GNSS/IMU timing,
+while a string round-trips losslessly through CSV and Parquet alike. It is
+deliberately not a phase reference; §3.5 already fixes phase to the
+transmitter current.
+
 ## §4 Manifest, survey identity, and re-ships
 
 **Survey identity and re-ships.** Re-ship lineage is the tuple

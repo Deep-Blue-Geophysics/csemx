@@ -21,8 +21,10 @@ It is deliberately **not** a container for:
 - **Instrument / vendor internals** — calibration files, coil or electrode
   response curves, gains, serial numbers, or any raw/uncalibrated output.
   Calibration is *applied* before delivery (§3.6), not shipped.
-- **Acquisition bookkeeping not needed to model the response** — navigation
-  uncertainty, per-sounding timestamps, weather, crew logs.
+- **Acquisition bookkeeping not needed to model the response** — weather, crew
+  logs, raw navigation/IMU streams. The optional advisory navigation, attitude,
+  and `time_utc` columns of §3.13 are the deliberate exception: they support
+  QA/QC but never alter the modeled geometry or datum.
 - **Modeling- or inversion-package settings** — meshes, regularization, error
   floors, starting models, inversion data weighting, or any other consumer-side
   parameter.
@@ -468,6 +470,128 @@ it from the encoded transmitter geometry, receiver geometry, and response. It
 must not replace the canonical `V/A` or `T/A` response in `real`; a producer
 may include it as an `ext_*` column for convenience.
 
+### 3.13 Navigation, Attitude, and Time (moving platforms)
+
+`tx.csv` and `rx.csv` (and their Parquet equivalents) may carry optional
+navigation/attitude metadata and a UTC timestamp for moving-platform surveys
+(towed, airborne, surface-vessel, autonomous). The metadata is **advisory**: it
+supports QA/QC — excessive pitch or roll, an inverted platform, rapid attitude
+changes, position discontinuities, elevated navigation uncertainty,
+motion-correlated artifacts — and does **not** alter reported element geometry,
+orientation, datum value, or the data-row uniqueness tuple (§9).
+
+| column               | type   | constraint     | meaning                                                   |
+| -------------------- | ------ | -------------- | --------------------------------------------------------- |
+| `nav_heading_deg`    | float  | `[0, 360)`     | platform heading, clockwise from true north               |
+| `nav_pitch_deg`      | float  | `[-90, 90]`    | platform pitch; positive nose-up                          |
+| `nav_roll_deg`       | float  | `(-180, 180]`  | platform roll; positive starboard-down                    |
+| `nav_heading_sd_deg` | float  | `>= 0`         | one-sigma heading uncertainty                             |
+| `nav_pitch_sd_deg`   | float  | `>= 0`         | one-sigma pitch uncertainty                               |
+| `nav_roll_sd_deg`    | float  | `>= 0`         | one-sigma roll uncertainty                                |
+| `nav_pos_sd_m`       | float  | `>= 0`         | one-sigma radial horizontal-position uncertainty          |
+| `nav_elev_sd_m`      | float  | `>= 0`         | one-sigma uncertainty of the reported vertical coordinate |
+| `time_utc`           | string | grammar below  | UTC time of the reported position and attitude            |
+
+Each column is optional. A blank value means the quantity is unavailable or not
+applicable (§3.8); bundles may contain any mixture of fixed and moving
+elements. When uncertainty was originally reported at a confidence level other
+than one standard deviation, the producer must convert it to a one-sigma value
+before writing these columns; the original convention and conversion may be
+documented in `notes.md`. A validator warns when an attitude uncertainty column
+is populated but its corresponding value column is blank (`nav_heading_sd_deg`
+without `nav_heading_deg`, likewise pitch and roll) — almost certainly a
+producer bug; the reverse (value without uncertainty) is normal.
+`nav_pos_sd_m` and `nav_elev_sd_m` qualify the vertex position and elevation
+rather than a navigation value column and may appear alone.
+
+**Platform frame and attitude convention.** Right-handed platform body frame:
+x forward, y starboard, z down. Heading is yaw about the down axis, clockwise
+from true geographic north; any magnetic-declination correction is applied by
+the producer before delivery (§3.3). Pitch is rotation about the starboard
+axis, positive nose-up. Roll is rotation about the forward axis, positive
+starboard-down. The attitude convention is an intrinsic ZYX Tait–Bryan
+sequence: yaw, then pitch, then roll. These quantities describe the **platform
+frame**, not the positive axis of an individual transmitter or receiver
+component (§3.3).
+
+**Authoritative geometry.** The element vertices and, for point elements,
+`azimuth_deg`/`dip_deg` remain the authoritative modeling geometry (§3.3,
+§3.4). Standard readers must not silently recompute or replace element
+geometry from navigation columns. Consumers may use the metadata to flag,
+filter, classify, or investigate observations per application-specific QA/QC
+policies. An advanced consumer may deliberately use it in a documented
+reprocessing or recalibration workflow; any revised positions or orientations
+constitute new derived geometry and should be written to a revised bundle.
+
+**Position.** Best-estimate positions are not duplicated; element positions
+remain encoded by the vertices (§6, §8). `nav_pos_sd_m` records the one-sigma
+radial uncertainty of the horizontal position represented by the vertices, and
+`nav_elev_sd_m` the one-sigma uncertainty of the vertex elevation.
+Axis-specific position uncertainties, position-error covariance, and complete
+navigation solutions are outside the normative v1.0 model; carry them in
+`ext_*` columns or external provenance.
+
+**Time (`time_utc`).** The UTC time associated with the element's reported
+position and attitude — normally the sounding time, or the time at which
+navigation and attitude were evaluated or interpolated for that observation.
+Grammar:
+
+```
+YYYY-MM-DDTHH:MM:SS[.fffffffff]Z
+```
+
+- The fractional part is optional: **one to nine** decimal digits when
+  present. The trailing `Z` is required; numeric UTC offsets are not
+  permitted.
+- This deliberately extends the manifest `acquired_*` grammar of §4 with
+  optional fractional seconds (navigation records are sub-second); the two
+  grammars are otherwise identical, and §4 timestamps continue to **reject**
+  fractional seconds.
+- The seconds field permits `60` for a UTC leap second, which occurs only at
+  `23:59:60Z` (e.g. `2016-12-31T23:59:60Z`).
+- Examples: `2026-04-17T20:31:42Z`, `2026-04-17T20:31:42.1Z`,
+  `2026-04-17T20:31:42.125734Z`, `2026-04-17T20:31:42.125734912Z`.
+- Producers should preserve the meaningful timestamp precision of the source
+  record and must not add meaningless fractional digits.
+- In both CSV and Parquet, `time_utc` is a UTF-8 **string**; in Parquet a
+  string-annotated byte-array column, **not** a floating-point timestamp.
+- Readers must parse `time_utc` without converting the complete timestamp to a
+  single floating-point value and must not silently discard supplied
+  fractional precision (a float64 epoch resolves only ~0.5 µs in the current
+  era). Acceptable parsed representations: separate calendar and clock fields;
+  integer whole seconds plus integer fractional nanoseconds; or another
+  representation preserving all supplied digits. If a native date-time type
+  cannot represent the supplied precision, retain the original string or the
+  unsupported digits separately.
+- `time_utc` is provenance and QA/QC metadata only. It is never a phase
+  reference, waveform timing reference, or replacement for the
+  transmitter-current spectral phase convention of §3.5.
+
+**Multiple components at one station.** Navigation metadata is stored on
+element rows and may repeat across components at one station. When multiple
+components share one platform observation, their navigation and time values
+should be identical; components observed at meaningfully different positions,
+attitudes, or times may carry different values, and producers should use
+distinct station IDs when those differences represent distinct sounding
+positions. Consumers must not assume two components have identical navigation
+metadata solely because they share a station ID.
+
+**Derived motion quantities.** Velocity, speed over ground, course over
+ground, angular rates, and similar quantities are not normative v1.0 columns.
+Consumers may derive them from consecutive positions, attitudes, and
+`time_utc` values; implementations must account for angular wraparound (a
+heading change from 359° to 1° is 2°, not −358°). Producer-supplied motion
+quantities may be carried in `ext_*` columns.
+
+**Scope.** In (optional, advisory): platform heading/pitch/roll; attitude
+uncertainty; horizontal and vertical position uncertainty; per-element UTC
+time. Out of the normative v1.0 model: raw navigation or IMU streams; mounting
+calibration; lever-arm and layback models; position/attitude covariance
+matrices; velocity, speed over ground, course over ground; heave and other
+derived vehicle-motion quantities; automatic geometry reconstruction from
+navigation measurements. Mounting, layback, and processing details go in
+`notes.md`; additional machine-readable quantities in `ext_*` columns.
+
 ## 4. File: `manifest.yaml`
 
 ```yaml
@@ -582,6 +706,7 @@ transmitters because they have no vertices from which to compute loop area.
 | column  | type   | purpose                                        |
 | ------- | ------ | ---------------------------------------------- |
 | `notes` | string | free text about this source element; max 1024 characters |
+| `nav_heading_deg`, `nav_pitch_deg`, `nav_roll_deg`, `nav_heading_sd_deg`, `nav_pitch_sd_deg`, `nav_roll_sd_deg`, `nav_pos_sd_m`, `nav_elev_sd_m`, `time_utc` | per §3.13 | advisory navigation/attitude metadata and UTC time for moving platforms |
 | `ext_*` | any    | producer-specific extension columns; not required for standard interpretation |
 
 ## 6. File: `tx_vertices.csv`
@@ -648,6 +773,7 @@ per §3.6.
 | column  | type   | purpose                                        |
 | ------- | ------ | ---------------------------------------------- |
 | `notes` | string | free text about this sensor element; max 1024 characters |
+| `nav_heading_deg`, `nav_pitch_deg`, `nav_roll_deg`, `nav_heading_sd_deg`, `nav_pitch_sd_deg`, `nav_roll_sd_deg`, `nav_pos_sd_m`, `nav_elev_sd_m`, `time_utc` | per §3.13 | advisory navigation/attitude metadata and UTC time for moving platforms |
 | `ext_*` | any    | producer-specific extension columns; not required for standard interpretation |
 
 ## 8. File: `rx_vertices.csv`

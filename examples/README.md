@@ -20,7 +20,7 @@ The public example set is:
 | `example_mixed_parquet.csemx` | same geometry as `example.csemx`, with `data.parquet` | mixed CSV/Parquet delivery; string-typed IDs in Parquet |
 | `land_dipole_dipole.csemx` | land CSEM, inline dipole–dipole | grounded HED Tx + inline E-dipole Rx at increasing offset; `tx_fundamental`; `use=0`; `NaN` missing datum; `ext_line_id` extension |
 | `seafloor_vector.csemx` | seafloor node + deep-towed 300 m HED | moving Tx; `altitude.reference: seafloor`; vertical `Ez` dipole; negative `elev`; `use` flag |
-| `airborne_hem.csemx` | airborne frequency-domain EM (HEM) | moving point-dipole bird; coplanar vs coaxial via `azimuth_deg`/`dip_deg`; `altitude.reference: ground`; `field.content: secondary` (secondary `T/A`, primary from geometry; ppm is derived) |
+| `airborne_hem.csemx` | airborne frequency-domain EM (HEM) | moving point-dipole bird; coplanar vs coaxial via `azimuth_deg`/`dip_deg`; `altitude.reference: ground`; `field.content: secondary` (secondary `T/A`, primary from geometry; ppm is derived); `nav_*` attitude/uncertainty columns and sub-second `time_utc` (§3.13) |
 
 Each `.csemx` directory is an unpacked bundle (`manifest.yaml` + the five
 required tables, plus an optional `notes.md` and an optional `groups.csv`

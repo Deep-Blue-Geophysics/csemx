@@ -3,11 +3,11 @@ function columns = csemxStringColumns(tableName)
 
 switch char(tableName)
     case "tx"
-        columns = ["tx_station_id", "tx_component_id", "geometry_type", "notes"];
+        columns = ["tx_station_id", "tx_component_id", "geometry_type", "notes", "time_utc"];
     case "tx_vertices"
         columns = ["tx_station_id", "tx_component_id"];
     case "rx"
-        columns = ["rx_station_id", "rx_component_id", "geometry_type", "notes"];
+        columns = ["rx_station_id", "rx_component_id", "geometry_type", "notes", "time_utc"];
     case "rx_vertices"
         columns = ["rx_station_id", "rx_component_id"];
     case "data"

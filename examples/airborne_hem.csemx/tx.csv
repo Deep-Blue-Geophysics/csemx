@@ -1,7 +1,7 @@
-tx_station_id,tx_component_id,geometry_type,azimuth_deg,dip_deg,point_moment_area_m2
-TXP1,Mcp,point,0,90,0.196
-TXP1,Mca,point,90,0,0.196
-TXP2,Mcp,point,0,90,0.196
-TXP2,Mca,point,90,0,0.196
-TXP3,Mcp,point,0,90,0.196
-TXP3,Mca,point,90,0,0.196
+tx_station_id,tx_component_id,geometry_type,azimuth_deg,dip_deg,point_moment_area_m2,nav_heading_deg,nav_pitch_deg,nav_roll_deg,nav_heading_sd_deg,nav_pitch_sd_deg,nav_roll_sd_deg,nav_pos_sd_m,nav_elev_sd_m,time_utc
+TXP1,Mcp,point,0,90,0.196,89.6,2.1,-1.4,0.5,0.3,0.3,0.9,1.2,2026-05-20T16:04:12.25Z
+TXP1,Mca,point,90,0,0.196,89.6,2.1,-1.4,0.5,0.3,0.3,0.9,1.2,2026-05-20T16:04:12.25Z
+TXP2,Mcp,point,0,90,0.196,90.4,1.8,0.6,0.5,0.3,0.3,0.8,1.1,2026-05-20T16:04:14.05Z
+TXP2,Mca,point,90,0,0.196,90.4,1.8,0.6,0.5,0.3,0.3,0.8,1.1,2026-05-20T16:04:14.05Z
+TXP3,Mcp,point,0,90,0.196,90.1,2.4,-0.3,0.5,0.3,0.3,0.8,1.1,2026-05-20T16:04:15.85Z
+TXP3,Mca,point,90,0,0.196,90.1,2.4,-0.3,0.5,0.3,0.3,0.8,1.1,2026-05-20T16:04:15.85Z

@@ -37,7 +37,16 @@
         "azimuth_deg",
         "dip_deg",
         "point_moment_area_m2",
-        "notes"
+        "notes",
+        "nav_heading_deg",
+        "nav_pitch_deg",
+        "nav_roll_deg",
+        "nav_heading_sd_deg",
+        "nav_pitch_sd_deg",
+        "nav_roll_sd_deg",
+        "nav_pos_sd_m",
+        "nav_elev_sd_m",
+        "time_utc"
       ],
       "extension_prefixes": [
         "ext_"
@@ -77,7 +86,16 @@
       "optional_columns": [
         "azimuth_deg",
         "dip_deg",
-        "notes"
+        "notes",
+        "nav_heading_deg",
+        "nav_pitch_deg",
+        "nav_roll_deg",
+        "nav_heading_sd_deg",
+        "nav_pitch_sd_deg",
+        "nav_roll_sd_deg",
+        "nav_pos_sd_m",
+        "nav_elev_sd_m",
+        "time_utc"
       ],
       "extension_prefixes": [
         "ext_"
