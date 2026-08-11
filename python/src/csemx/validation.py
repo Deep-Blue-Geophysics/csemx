@@ -64,6 +64,9 @@ DEFAULT_MANIFEST_SCHEMA = default_schema_path("manifest.schema.json")
 SAFE_ROOT_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+# A CR that is not part of a CRLF pair: splitlines() ends a line on it, the
+# csv module rejects it mid-record.
+_LONE_CR_RE = re.compile(r"\r(?!\n)")
 ACQUIRED_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 ACQUIRED_UTC_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 # §3.13 time_utc: the §4 UTC grammar extended with optional 1-9 fractional
@@ -1222,7 +1225,17 @@ def _valid_csv_use(value):
 
 
 def _simple_csv_lines(text):
-    if '"' in text:
+    """Split CSV the way ``csv`` would, or return None if it would not agree.
+
+    ``str.splitlines()`` breaks on more characters than the ``csv`` module
+    treats as record separators, and ``csv`` rejects some of them outright.
+    Any text containing one of those characters is handed back to the
+    ``csv``-module path so the validator keeps agreeing with ``read()``.
+    """
+
+    if '"' in text or "\x00" in text:
+        # NUL is rejected by the csv module on some interpreter versions
+        # ("line contains NUL"); never take the fast path on it.
         return None
     for marker in (
         "\v",
@@ -1236,6 +1249,10 @@ def _simple_csv_lines(text):
     ):
         if marker in text:
             return None
+    if "\r" in text and _LONE_CR_RE.search(text) is not None:
+        # CRLF is a normal line ending, but a bare CR is a record separator to
+        # splitlines() and an error to the csv module.
+        return None
     return text.splitlines()
 
 
