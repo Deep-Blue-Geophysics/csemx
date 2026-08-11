@@ -1098,6 +1098,34 @@ class CsvDataScannerParityTests(unittest.TestCase):
         self.assertEqual(expected_errors, scan.row_errors)
         self.assertTrue(scan.has_dc)
 
+    def test_short_and_nonfinite_rows_match_scalar_reference(self):
+        # Short records (DictReader pads with None), infinities, and a blank
+        # line that must not advance the reported row number.
+        text = self.csv_text(
+            [
+                "TX01,E1,001,Ex,1,inf,2,0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,2,1,-inf,0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,3,1,2,inf,0.2,0.25,1",
+                "TX01,E1,001,Ex,4,1,2,0.1,inf,0.25,1",
+                "TX01,E1,001,Ex,inf,1,2,0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,5,1,2,0.1,0.2,abc,abc",
+                "TX01,E1,001,Ex,6",
+                "TX01,E1",
+                "",
+                "TX01,E1,001,Ex,7,2.14e-6,-3.10e-7,3.0e-8,2.8e-8,0.25,1",
+            ]
+        )
+
+        scan = self.scan_and_reference(text)
+
+        self.assertEqual([], scan.unique_errors)
+        self.assertTrue(scan.row_errors)
+        # The blank line is skipped by both readers, so the trailing valid
+        # record is row 10 and contributes no errors.
+        self.assertEqual(
+            [],
+            [error for error in scan.row_errors if error.startswith("data.csv:10")],
+        )
 
     def test_duplicate_phase_prevents_semantic_data_errors(self):
         tempdir = tempfile.TemporaryDirectory()
@@ -1149,6 +1177,8 @@ class CsvDataFastPathTests(unittest.TestCase):
         # write_bytes, not write_text(newline=...): the newline kwarg is 3.10+.
         (bundle / "data.csv").write_bytes(text.encode("utf-8"))
 
+    def requote(self, line):
+        return ",".join('"' + cell + '"' for cell in line.split(","))
 
     def test_simple_csv_lines_rejects_lone_cr_and_nul(self):
         self.assertIsNone(validate_csemx._simple_csv_lines("a,b\rc,d\n"))
@@ -1220,17 +1250,196 @@ class CsvDataFastPathTests(unittest.TestCase):
         self.assertEqual([], errors)
         self.assertEqual(self.baseline_warnings(), warnings)
 
+    def test_quoted_csv_falls_back_to_the_reference_reader(self):
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        # Includes a DC record, so the fallback also reports has_dc.
+        lines.append("TX01,E1,001,Ex,0,3.1e-3,0,4.0e-5,0")
+        self.write_data(bundle, "\n".join(self.requote(line) for line in lines) + "\n")
 
+        errors, warnings = self.validate_bundle(bundle)
 
+        self.assertEqual([], errors)
+        self.assertEqual(self.baseline_warnings(), warnings)
 
+    def test_too_many_fields_short_circuits_the_row_scanner(self):
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        self.write_data(bundle, "\n".join(lines + [lines[1] + ",extra"]) + "\n")
 
+        errors, warnings = self.validate_bundle(bundle)
 
+        self.assertEqual([f"data.csv:{len(lines) + 1}: too many fields"], errors)
+        # The width error short-circuits before manifest validation, so only
+        # resolution warnings can appear.
+        self.assertEqual([], warnings)
 
+    def test_uniqueness_only_scan_matches_the_reference_key_normalisation(self):
+        # An unrelated table error suppresses row validation, leaving the
+        # uniqueness-only scan: blank lines, short records, and blank or
+        # unparseable frequencies must normalise exactly like check_unique.
+        bundle = self.copy_example()
+        tx = bundle / "tx.csv"
+        tx_lines = tx.read_text(encoding="utf-8").rstrip("\n").split("\n")
+        tx.write_bytes(
+            "\n".join(
+                [tx_lines[0] + ",bogus"] + [line + ",1" for line in tx_lines[1:]]
+            ).encode("utf-8")
+            + b"\n"
+        )
 
+        lines = self.data_lines(bundle)
+        extra = [
+            "",
+            "TX01,E1",
+            "TX01,E1,001,Ex,,1,2,0.1,0.2",
+            "TX01,E1,001,Ex,,1,2,0.1,0.3",
+            "TX01,E1,001,Ex,bogus,1,2,0.1,0.2",
+            "TX01,E1,001,Ex,bogus,1,2,0.1,0.3",
+            lines[1],
+        ]
+        self.write_data(bundle, "\n".join(lines + extra) + "\n")
 
+        errors, _warnings = self.validate_bundle(bundle)
 
+        self.assertEqual(
+            [
+                "tx.csv: unexpected column 'bogus'; producer extensions must use "
+                "ext_* columns",
+                "data.csv:10: duplicate key ('TX01', 'E1', '001', 'Ex', None)",
+                "data.csv:12: duplicate key ('TX01', 'E1', '001', 'Ex', 'bogus')",
+                "data.csv:13: duplicate key ('TX01', 'E1', '001', 'Ex', 0.125)",
+            ],
+            errors,
+        )
 
+    def test_uniqueness_only_scan_reports_row_width_errors(self):
+        bundle = self.copy_example()
+        manifest = bundle / "manifest.yaml"
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8") + "\nfield:\n  content: bogus\n",
+            encoding="utf-8",
+        )
+        lines = self.data_lines(bundle)
+        self.write_data(bundle, "\n".join(lines + [lines[1] + ",extra"]) + "\n")
 
+        errors, _warnings = self.validate_bundle(bundle)
+
+        self.assertEqual([f"data.csv:{len(lines) + 1}: too many fields"], errors)
+
+    def test_quoted_csv_duplicate_key_is_reported(self):
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        quoted = [self.requote(line) for line in lines]
+        quoted.append(self.requote(lines[1].replace(",0.125,", ",1.25e-1,", 1)))
+        self.write_data(bundle, "\n".join(quoted) + "\n")
+
+        errors, _warnings = self.validate_bundle(bundle)
+
+        self.assertEqual(
+            [
+                f"data.csv:{len(lines) + 1}: duplicate key "
+                "('TX01', 'E1', '001', 'Ex', 0.125)"
+            ],
+            errors,
+        )
+
+    def test_quoted_csv_too_many_fields_is_reported(self):
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        quoted = [self.requote(line) for line in lines]
+        quoted.append(self.requote(lines[1]) + ',"extra"')
+        self.write_data(bundle, "\n".join(quoted) + "\n")
+
+        errors, _warnings = self.validate_bundle(bundle)
+
+        self.assertEqual([f"data.csv:{len(lines) + 1}: too many fields"], errors)
+
+    def reorder_data_columns(self, bundle, extra_rows=()):
+        """Rewrite data.csv with the key columns out of canonical order."""
+
+        lines = self.data_lines(bundle)
+        header = lines[0].split(",")
+        order = [header.index("frequency")] + [
+            index for index, name in enumerate(header) if name != "frequency"
+        ]
+        rows = [line.split(",") for line in lines[1:]] + [
+            row.split(",") for row in extra_rows
+        ]
+        rewritten = [",".join(header[index] for index in order)]
+        rewritten += [",".join(row[index] for index in order) for row in rows]
+        self.write_data(bundle, "\n".join(rewritten) + "\n")
+        return len(lines)
+
+    def test_noncanonical_column_order_falls_back_to_the_reference_reader(self):
+        bundle = self.copy_example()
+        self.reorder_data_columns(bundle)
+
+        errors, warnings = self.validate_bundle(bundle)
+
+        self.assertEqual([], errors)
+        self.assertEqual(self.baseline_warnings(), warnings)
+
+    def test_noncanonical_column_order_still_detects_duplicates(self):
+        bundle = self.copy_example()
+        duplicate = self.data_lines(bundle)[1].replace(",0.125,", ",1.25e-1,", 1)
+        row_count = self.reorder_data_columns(bundle, extra_rows=[duplicate])
+
+        errors, _warnings = self.validate_bundle(bundle)
+
+        self.assertEqual(
+            [
+                f"data.csv:{row_count + 1}: duplicate key "
+                "('TX01', 'E1', '001', 'Ex', 0.125)"
+            ],
+            errors,
+        )
+
+    def test_data_width_error_precedes_unparseable_manifest(self):
+        # DictReader used to discover row-width errors before the manifest was
+        # parsed; the lazy data table must preserve that precedence.
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        self.write_data(bundle, "\n".join(lines + [lines[1] + ",extra"]) + "\n")
+        (bundle / "manifest.yaml").write_text("- not a mapping\n", encoding="utf-8")
+
+        errors, warnings = self.validate_bundle(bundle)
+
+        self.assertEqual([f"data.csv:{len(lines) + 1}: too many fields"], errors)
+        # The width error short-circuits before manifest validation, so only
+        # resolution warnings can appear.
+        self.assertEqual([], warnings)
+
+    def test_unparseable_manifest_still_raises_when_data_is_well_formed(self):
+        bundle = self.copy_example()
+        (bundle / "manifest.yaml").write_text("- not a mapping\n", encoding="utf-8")
+
+        with self.assertRaises(validate_csemx.ValidationError):
+            self.validate_bundle(bundle)
+
+    def test_data_width_error_joins_table_resolution_errors(self):
+        # A table that resolves to two formats short-circuits validation; the
+        # data-width error is still reported, in table order, and the blank line
+        # must not shift the reported row number.
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        self.write_data(
+            bundle,
+            "\n".join(lines + ["", lines[1] + ",extra"]) + "\n",
+        )
+        (bundle / "groups.csv").write_bytes(b"group_kind,group_id\n")
+        (bundle / "groups.parquet").write_bytes(b"not-a-parquet-file")
+
+        errors, _warnings = self.validate_bundle(bundle)
+
+        self.assertEqual(
+            [
+                f"data.csv:{len(lines) + 1}: too many fields",
+                "table must appear in exactly one format: "
+                "['groups.csv', 'groups.parquet']",
+            ],
+            errors,
+        )
 
     def test_schema_unique_key_drives_data_duplicate_detection(self):
         # The data table's uniqueness key comes from the schema, like every
