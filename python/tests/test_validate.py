@@ -1268,6 +1268,44 @@ class CsvDataFastPathTests(unittest.TestCase):
         path.write_text(json.dumps(schema), encoding="utf-8")
         return path
 
+    def test_per_table_errors_follow_schema_table_order(self):
+        # Per-table errors are emitted in schema["tables"] order, not in
+        # required_tables + optional_tables order.
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        tables = schema["tables"]
+        schema["tables"] = {
+            name: tables[name]
+            for name in ["data"] + [key for key in tables if key != "data"]
+        }
+        schema_path = self.write_schema(schema)
+
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        self.write_data(
+            bundle,
+            "\n".join([lines[0] + ",bogus"] + [line + ",1" for line in lines[1:]])
+            + "\n",
+        )
+        tx = bundle / "tx.csv"
+        tx_lines = tx.read_text(encoding="utf-8").rstrip("\n").split("\n")
+        tx.write_bytes(
+            "\n".join(
+                [tx_lines[0] + ",bogus"] + [line + ",1" for line in tx_lines[1:]]
+            ).encode("utf-8")
+            + b"\n"
+        )
+
+        errors, _warnings = self.validate_bundle(bundle, schema=schema_path)
+
+        self.assertEqual(
+            [
+                "data.csv: unexpected column 'bogus'; producer extensions must use "
+                "ext_* columns",
+                "tx.csv: unexpected column 'bogus'; producer extensions must use "
+                "ext_* columns",
+            ],
+            errors,
+        )
 
 
 class DcFrequencyTests(unittest.TestCase):

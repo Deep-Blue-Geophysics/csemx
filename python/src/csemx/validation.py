@@ -1903,8 +1903,11 @@ def validate(
 
     errors.extend(manifest_errors)
     warnings.extend(manifest_warnings)
-    for table_name in table_order:
-        errors.extend(table_errors[table_name])
+    # Per-table errors are emitted in schema["tables"] order, matching the
+    # single pass this bucketing replaced. Every table_order name is a
+    # schema["tables"] key (resolve_table indexes it), so nothing is dropped.
+    for table_name in schema["tables"]:
+        errors.extend(table_errors.get(table_name, ()))
 
     if errors:
         return errors, warnings
