@@ -1162,6 +1162,18 @@ def validate_data_row(row, row_label, tx_keys, rx_keys, errors):
     return is_dc
 
 
+# The data-table uniqueness key the fast scanners are specialised for. The
+# authoritative key is schema["tables"]["data"]["unique_key"]; this constant
+# exists only to decide whether the specialisation still applies.
+CANONICAL_DATA_UNIQUE_KEY = (
+    "tx_station_id",
+    "tx_component_id",
+    "rx_station_id",
+    "rx_component_id",
+    "frequency",
+)
+
+
 class _CsvDataScan:
     __slots__ = ("unique_errors", "row_errors", "has_dc")
 
@@ -1271,6 +1283,7 @@ def _scan_csv_data_legacy(
     tx_keys,
     rx_keys,
     *,
+    unique_key,
     check_uniqueness,
     validate_rows,
 ):
@@ -1280,14 +1293,7 @@ def _scan_csv_data_legacy(
     rows = _materialize_csv_data_rows(table)
     label = table["filename"]
     if check_uniqueness:
-        check_unique_columns = (
-            "tx_station_id",
-            "tx_component_id",
-            "rx_station_id",
-            "rx_component_id",
-            "frequency",
-        )
-        check_unique(rows, check_unique_columns, label, scan.unique_errors)
+        check_unique(rows, unique_key, label, scan.unique_errors)
     if validate_rows:
         for row_number, row in enumerate(rows, start=2):
             if validate_data_row(
@@ -1615,20 +1621,20 @@ def _scan_csv_data(
     tx_keys=None,
     rx_keys=None,
     *,
-    check_unique=True,
+    unique_key=CANONICAL_DATA_UNIQUE_KEY,
+    check_uniqueness=True,
     validate_rows=False,
 ):
     """Scan data.csv while preserving the validator's diagnostic phases."""
 
     header = table["header"]
     lines = _simple_csv_lines(table["rows"].text)
-    standard_key_order = header[:5] == [
-        "tx_station_id",
-        "tx_component_id",
-        "rx_station_id",
-        "rx_component_id",
-        "frequency",
-    ]
+    standard_key_order = header[:5] == list(CANONICAL_DATA_UNIQUE_KEY)
+    # The fast scanners hardcode the canonical five-column key, so they are
+    # only usable while the schema still asks for exactly that key. A schema
+    # that moves the key self-disables them.
+    canonical_unique_key = list(unique_key) == list(CANONICAL_DATA_UNIQUE_KEY)
+    uniqueness_needed = check_uniqueness or validate_rows
     required_values_present = all(
         column in header
         for column in ("real", "imag", "err_real", "err_imag")
@@ -1636,13 +1642,15 @@ def _scan_csv_data(
     if (
         lines is None
         or not standard_key_order
+        or (uniqueness_needed and not canonical_unique_key)
         or (validate_rows and not required_values_present)
     ):
         return _scan_csv_data_legacy(
             table,
             tx_keys,
             rx_keys,
-            check_uniqueness=check_unique,
+            unique_key=unique_key,
+            check_uniqueness=check_uniqueness,
             validate_rows=validate_rows,
         )
     if validate_rows:
@@ -1652,7 +1660,7 @@ def _scan_csv_data(
             tx_keys,
             rx_keys,
         )
-    if check_unique:
+    if check_uniqueness:
         return _scan_standard_csv_data_unique(table, lines)
     _check_standard_csv_data_structure(table, lines)
     return _CsvDataScan()
@@ -1802,12 +1810,14 @@ def validate(
         if data_table is not None and isinstance(data_table["rows"], _CsvDataRows)
         else None
     )
+    data_unique_key = schema["tables"]["data"].get("unique_key", [])
     if any(resolution_errors.values()):
         if csv_data_table is not None:
             try:
                 _scan_csv_data(
                     csv_data_table,
-                    check_unique=False,
+                    unique_key=data_unique_key,
+                    check_uniqueness=False,
                     validate_rows=False,
                 )
             except ValidationError as exc:
@@ -1835,7 +1845,8 @@ def validate(
             try:
                 _scan_csv_data(
                     csv_data_table,
-                    check_unique=False,
+                    unique_key=data_unique_key,
+                    check_uniqueness=False,
                     validate_rows=False,
                 )
             except ValidationError as exc:
@@ -1883,6 +1894,7 @@ def validate(
                 csv_data_table,
                 tx_keys_for_scan,
                 rx_keys_for_scan,
+                unique_key=data_unique_key,
                 validate_rows=not pre_data_errors,
             )
         except ValidationError as exc:
