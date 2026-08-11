@@ -1096,6 +1096,7 @@ class CsvDataScannerParityTests(unittest.TestCase):
         self.assertEqual(expected_errors, scan.row_errors)
         self.assertTrue(scan.has_dc)
 
+
     def test_duplicate_phase_prevents_semantic_data_errors(self):
         tempdir = tempfile.TemporaryDirectory()
         bundle = Path(tempdir.name) / "example.csemx"
@@ -1118,6 +1119,119 @@ class CsvDataScannerParityTests(unittest.TestCase):
             ],
             errors,
         )
+
+
+class CsvDataFastPathTests(unittest.TestCase):
+    """The fast scanner must never disagree with the csv-module reference."""
+
+    def copy_example(self):
+        tempdir = tempfile.TemporaryDirectory()
+        bundle = Path(tempdir.name) / "example.csemx"
+        shutil.copytree(EXAMPLE, bundle)
+        self.addCleanup(tempdir.cleanup)
+        return bundle
+
+    def validate_bundle(self, bundle, schema=SCHEMA):
+        return validate_csemx.validate(bundle, schema)
+
+    def baseline_warnings(self):
+        """Warnings a pristine example emits (optional deps may be absent)."""
+
+        return self.validate_bundle(self.copy_example())[1]
+
+    def data_lines(self, bundle):
+        # Physical records, without the trailing newline artefact.
+        return (bundle / "data.csv").read_text(encoding="utf-8").rstrip("\n").split("\n")
+
+    def write_data(self, bundle, text):
+        # write_bytes, not write_text(newline=...): the newline kwarg is 3.10+.
+        (bundle / "data.csv").write_bytes(text.encode("utf-8"))
+
+
+    def test_simple_csv_lines_rejects_lone_cr_and_nul(self):
+        self.assertIsNone(validate_csemx._simple_csv_lines("a,b\rc,d\n"))
+        self.assertIsNone(validate_csemx._simple_csv_lines("a,b\nc,d\x00\n"))
+        self.assertIsNone(validate_csemx._simple_csv_lines('a,"b"\n'))
+        # splitlines() breaks on these; the csv module does not.
+        for marker in ("\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"):
+            self.assertIsNone(
+                validate_csemx._simple_csv_lines(f"a,b\nc,d{marker}e\n"), marker
+            )
+        # CRLF is an ordinary line ending and must stay on the fast path.
+        self.assertEqual(
+            ["a,b", "c,d"],
+            validate_csemx._simple_csv_lines("a,b\r\nc,d\r\n"),
+        )
+
+    def assert_validate_agrees_with_read(self, bundle):
+        """validate() and read() must both accept or both reject a bundle."""
+
+        validate_failed = None
+        try:
+            self.validate_bundle(bundle)
+        except csv.Error:
+            validate_failed = True
+        else:
+            validate_failed = False
+
+        read_failed = None
+        try:
+            csemx.read(bundle)
+        except csv.Error:
+            read_failed = True
+        else:
+            read_failed = False
+
+        self.assertEqual(read_failed, validate_failed)
+        return validate_failed
+
+    def test_lone_cr_between_records_is_rejected_like_the_reader(self):
+        # A bare CR is a record separator to str.splitlines() and an error to
+        # the csv module; validate() must not silently accept what read() cannot
+        # open (classic-Mac exports, botched line-ending conversions).
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        self.write_data(
+            bundle,
+            lines[0] + "\n" + lines[1] + "\r" + "\n".join(lines[2:]) + "\n",
+        )
+
+        self.assertTrue(self.assert_validate_agrees_with_read(bundle))
+
+    def test_nul_in_data_keeps_validate_and_read_in_agreement(self):
+        # The csv module raises "line contains NUL" on some interpreter
+        # versions and not others; whichever it does, both entry points agree.
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        lines[1] = lines[1].replace(",Ex,", ",E\x00x,", 1)
+        self.write_data(bundle, "\n".join(lines) + "\n")
+
+        self.assert_validate_agrees_with_read(bundle)
+
+    def test_crlf_data_validates_clean(self):
+        bundle = self.copy_example()
+        lines = self.data_lines(bundle)
+        self.write_data(bundle, "\r\n".join(lines) + "\r\n")
+
+        errors, warnings = self.validate_bundle(bundle)
+
+        self.assertEqual([], errors)
+        self.assertEqual(self.baseline_warnings(), warnings)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class DcFrequencyTests(unittest.TestCase):
