@@ -139,6 +139,15 @@ class ValidationError(Exception):
     pass
 
 
+class _CsvDataRows:
+    """Unmaterialized CSV data rows used only by the validator hot path."""
+
+    __slots__ = ("text",)
+
+    def __init__(self, text: str):
+        self.text = text
+
+
 def validate_full_dependencies(errors):
     if yaml is None:
         errors.append(
@@ -362,7 +371,7 @@ def duplicate_values(values):
     return duplicates
 
 
-def load_csv(bundle: Bundle, name: str):
+def load_csv(bundle: Bundle, name: str, *, materialize_rows: bool = True):
     text = bundle.read_text(name)
     reader = csv.DictReader(io.StringIO(text))
     if reader.fieldnames is None:
@@ -371,6 +380,8 @@ def load_csv(bundle: Bundle, name: str):
     if duplicates:
         formatted = ", ".join(repr(value) for value in sorted(duplicates))
         raise ValidationError(f"{name}: duplicate header column(s): {formatted}")
+    if not materialize_rows:
+        return reader.fieldnames, _CsvDataRows(text)
     rows = list(reader)
     for i, row in enumerate(rows, start=2):
         if None in row:
@@ -428,7 +439,15 @@ def load_parquet(bundle: Bundle, name: str, table_schema):
     return header, rows
 
 
-def resolve_table(bundle: Bundle, names: set[str], table_name: str, table_schema, formats):
+def resolve_table(
+    bundle: Bundle,
+    names: set[str],
+    table_name: str,
+    table_schema,
+    formats,
+    *,
+    materialize_csv_rows: bool = True,
+):
     candidates = [f"{table_name}.{fmt}" for fmt in formats if f"{table_name}.{fmt}" in names]
     if len(candidates) != 1:
         choices = " or ".join(f"{table_name}.{fmt}" for fmt in formats)
@@ -437,7 +456,11 @@ def resolve_table(bundle: Bundle, names: set[str], table_name: str, table_schema
         raise ValidationError(f"table must appear in exactly one format: {candidates}")
     filename = candidates[0]
     if filename.endswith(".csv"):
-        header, rows = load_csv(bundle, filename)
+        header, rows = load_csv(
+            bundle,
+            filename,
+            materialize_rows=materialize_csv_rows,
+        )
     elif filename.endswith(".parquet"):
         header, rows = load_parquet(bundle, filename, table_schema)
     else:
@@ -1136,6 +1159,488 @@ def validate_data_row(row, row_label, tx_keys, rx_keys, errors):
     return is_dc
 
 
+class _CsvDataScan:
+    __slots__ = ("unique_errors", "row_errors", "has_dc")
+
+    def __init__(self):
+        self.unique_errors = []
+        self.row_errors = []
+        self.has_dc = False
+
+
+def _csv_row_dict(header, row):
+    """Reproduce DictReader's complete mapping for a short CSV record."""
+
+    row_length = len(row)
+    return {
+        column: row[index] if index < row_length else None
+        for index, column in enumerate(header)
+    }
+
+
+def _classify_csv_id(value, pattern):
+    canonical = None if is_blank(value) else value
+    valid = (
+        isinstance(value, str)
+        and value.strip() != ""
+        and value.lower() != "nan"
+        and pattern.fullmatch(value) is not None
+    )
+    return canonical, valid
+
+
+def _classify_csv_frequency(value):
+    if is_blank(value):
+        return None, None, False
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return value, None, False
+    if not math.isfinite(parsed):
+        return value, parsed, False
+    return parsed, parsed, parsed >= 0
+
+
+def _valid_optional_positive_float(value):
+    if is_blank(value):
+        return True
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(parsed) and parsed > 0
+
+
+def _valid_csv_use(value):
+    if is_blank(value) or is_nan_value(value):
+        return False
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return False
+    return str(value).strip() == str(parsed) and parsed in (0, 1)
+
+
+def _simple_csv_lines(text):
+    if '"' in text:
+        return None
+    for marker in (
+        "\v",
+        "\f",
+        "\x1c",
+        "\x1d",
+        "\x1e",
+        "\x85",
+        "\u2028",
+        "\u2029",
+    ):
+        if marker in text:
+            return None
+    return text.splitlines()
+
+
+def _materialize_csv_data_rows(table):
+    reader = csv.DictReader(io.StringIO(table["rows"].text))
+    rows = list(reader)
+    label = table["filename"]
+    for row_number, row in enumerate(rows, start=2):
+        if None in row:
+            raise ValidationError(f"{label}:{row_number}: too many fields")
+    return rows
+
+
+def _scan_csv_data_legacy(
+    table,
+    tx_keys,
+    rx_keys,
+    *,
+    check_uniqueness,
+    validate_rows,
+):
+    """Exact fallback for quoted CSV and noncanonical column layouts."""
+
+    scan = _CsvDataScan()
+    rows = _materialize_csv_data_rows(table)
+    label = table["filename"]
+    if check_uniqueness:
+        check_unique_columns = (
+            "tx_station_id",
+            "tx_component_id",
+            "rx_station_id",
+            "rx_component_id",
+            "frequency",
+        )
+        check_unique(rows, check_unique_columns, label, scan.unique_errors)
+    if validate_rows:
+        for row_number, row in enumerate(rows, start=2):
+            if validate_data_row(
+                row,
+                f"{label}:{row_number}",
+                tx_keys,
+                rx_keys,
+                scan.row_errors,
+            ):
+                scan.has_dc = True
+    return scan
+
+
+def _check_standard_csv_data_structure(table, lines):
+    label = table["filename"]
+    column_count = len(table["header"])
+    row_number = 1
+    for line in lines[1:]:
+        if not line:
+            continue
+        row_number += 1
+        if line.count(",") + 1 > column_count:
+            raise ValidationError(f"{label}:{row_number}: too many fields")
+
+
+def _scan_standard_csv_data_unique(table, lines):
+    """Fast five-column uniqueness pass for ordinary writer output."""
+
+    scan = _CsvDataScan()
+    label = table["filename"]
+    column_count = len(table["header"])
+    missing = object()
+    tx_station_cache = {}
+    tx_component_cache = {}
+    rx_station_cache = {}
+    rx_component_cache = {}
+    frequency_cache = {}
+    frequencies_by_series = {}
+    finite = math.isfinite
+    row_number = 1
+
+    for line in lines[1:]:
+        if not line:
+            continue
+        row_number += 1
+        row = line.split(",")
+        row_length = len(row)
+        if row_length > column_count:
+            raise ValidationError(f"{label}:{row_number}: too many fields")
+        if row_length < 5:
+            tx_station_raw = row[0] if row_length > 0 else None
+            tx_component_raw = row[1] if row_length > 1 else None
+            rx_station_raw = row[2] if row_length > 2 else None
+            rx_component_raw = row[3] if row_length > 3 else None
+            frequency_raw = row[4] if row_length > 4 else None
+        else:
+            tx_station_raw = row[0]
+            tx_component_raw = row[1]
+            rx_station_raw = row[2]
+            rx_component_raw = row[3]
+            frequency_raw = row[4]
+
+        tx_station = tx_station_cache.get(tx_station_raw, missing)
+        if tx_station is missing:
+            tx_station = None if is_blank(tx_station_raw) else tx_station_raw
+            tx_station_cache[tx_station_raw] = tx_station
+        tx_component = tx_component_cache.get(tx_component_raw, missing)
+        if tx_component is missing:
+            tx_component = None if is_blank(tx_component_raw) else tx_component_raw
+            tx_component_cache[tx_component_raw] = tx_component
+        rx_station = rx_station_cache.get(rx_station_raw, missing)
+        if rx_station is missing:
+            rx_station = None if is_blank(rx_station_raw) else rx_station_raw
+            rx_station_cache[rx_station_raw] = rx_station
+        rx_component = rx_component_cache.get(rx_component_raw, missing)
+        if rx_component is missing:
+            rx_component = None if is_blank(rx_component_raw) else rx_component_raw
+            rx_component_cache[rx_component_raw] = rx_component
+
+        series = (tx_station, tx_component, rx_station, rx_component)
+        frequencies = frequencies_by_series.get(series)
+        if frequencies is None:
+            frequencies = set()
+            frequencies_by_series[series] = frequencies
+
+        canonical_frequency = frequency_cache.get(frequency_raw, missing)
+        if canonical_frequency is missing:
+            if is_blank(frequency_raw):
+                canonical_frequency = None
+            else:
+                try:
+                    parsed_frequency = float(frequency_raw)
+                except (TypeError, ValueError):
+                    canonical_frequency = frequency_raw
+                else:
+                    canonical_frequency = (
+                        parsed_frequency
+                        if finite(parsed_frequency)
+                        else frequency_raw
+                    )
+            frequency_cache[frequency_raw] = canonical_frequency
+
+        previous_count = len(frequencies)
+        frequencies.add(canonical_frequency)
+        if len(frequencies) == previous_count:
+            key = series + (canonical_frequency,)
+            scan.unique_errors.append(
+                f"{label}:{row_number}: duplicate key {key}"
+            )
+
+    return scan
+
+
+def _scan_standard_csv_data_rows(table, lines, tx_keys, rx_keys):
+    """Validate ordinary data.csv rows without per-row dictionaries."""
+
+    scan = _CsvDataScan()
+    label = table["filename"]
+    header = table["header"]
+    indexes = {column: index for index, column in enumerate(header)}
+    real_index = indexes["real"]
+    imag_index = indexes["imag"]
+    err_real_index = indexes["err_real"]
+    err_imag_index = indexes["err_imag"]
+    tx_fundamental_index = indexes.get("tx_fundamental", -1)
+    use_index = indexes.get("use", -1)
+    max_value_index = max(
+        real_index,
+        imag_index,
+        err_real_index,
+        err_imag_index,
+    )
+    column_count = len(header)
+    missing = object()
+    tx_station_cache = {}
+    tx_component_cache = {}
+    rx_station_cache = {}
+    rx_component_cache = {}
+    frequency_cache = {}
+    tx_fundamental_cache = {}
+    use_cache = {}
+    frequencies_by_series = {}
+    row_number = 1
+
+    for line in lines[1:]:
+        if not line:
+            continue
+        row_number += 1
+        row = line.split(",")
+        row_length = len(row)
+        if row_length > column_count:
+            raise ValidationError(f"{label}:{row_number}: too many fields")
+        if row_length < 5:
+            tx_station_raw = row[0] if row_length > 0 else None
+            tx_component_raw = row[1] if row_length > 1 else None
+            rx_station_raw = row[2] if row_length > 2 else None
+            rx_component_raw = row[3] if row_length > 3 else None
+            frequency_raw = row[4] if row_length > 4 else None
+        else:
+            tx_station_raw = row[0]
+            tx_component_raw = row[1]
+            rx_station_raw = row[2]
+            rx_component_raw = row[3]
+            frequency_raw = row[4]
+
+        tx_station_info = tx_station_cache.get(tx_station_raw, missing)
+        if tx_station_info is missing:
+            tx_station_info = _classify_csv_id(tx_station_raw, ID_RE)
+            tx_station_cache[tx_station_raw] = tx_station_info
+        tx_component_info = tx_component_cache.get(tx_component_raw, missing)
+        if tx_component_info is missing:
+            tx_component_info = _classify_csv_id(
+                tx_component_raw,
+                COMPONENT_RE,
+            )
+            tx_component_cache[tx_component_raw] = tx_component_info
+        rx_station_info = rx_station_cache.get(rx_station_raw, missing)
+        if rx_station_info is missing:
+            rx_station_info = _classify_csv_id(rx_station_raw, ID_RE)
+            rx_station_cache[rx_station_raw] = rx_station_info
+        rx_component_info = rx_component_cache.get(rx_component_raw, missing)
+        if rx_component_info is missing:
+            rx_component_info = _classify_csv_id(
+                rx_component_raw,
+                COMPONENT_RE,
+            )
+            rx_component_cache[rx_component_raw] = rx_component_info
+        frequency_info = frequency_cache.get(frequency_raw, missing)
+        if frequency_info is missing:
+            frequency_info = _classify_csv_frequency(frequency_raw)
+            frequency_cache[frequency_raw] = frequency_info
+
+        tx_station, tx_station_valid = tx_station_info
+        tx_component, tx_component_valid = tx_component_info
+        rx_station, rx_station_valid = rx_station_info
+        rx_component, rx_component_valid = rx_component_info
+        canonical_frequency, frequency, frequency_valid = frequency_info
+
+        series = (tx_station, tx_component, rx_station, rx_component)
+        frequencies = frequencies_by_series.get(series)
+        if frequencies is None:
+            frequencies = set()
+            frequencies_by_series[series] = frequencies
+        previous_count = len(frequencies)
+        frequencies.add(canonical_frequency)
+        if len(frequencies) == previous_count:
+            key = series + (canonical_frequency,)
+            scan.unique_errors.append(
+                f"{label}:{row_number}: duplicate key {key}"
+            )
+
+        row_is_valid = (
+            tx_station_valid
+            and tx_component_valid
+            and rx_station_valid
+            and rx_component_valid
+            and (tx_station_raw, tx_component_raw) in tx_keys
+            and (rx_station_raw, rx_component_raw) in rx_keys
+            and frequency_valid
+        )
+
+        if tx_fundamental_index >= 0:
+            tx_fundamental_raw = (
+                row[tx_fundamental_index]
+                if tx_fundamental_index < row_length
+                else None
+            )
+            tx_fundamental_valid = tx_fundamental_cache.get(
+                tx_fundamental_raw,
+                missing,
+            )
+            if tx_fundamental_valid is missing:
+                tx_fundamental_valid = _valid_optional_positive_float(
+                    tx_fundamental_raw
+                )
+                tx_fundamental_cache[tx_fundamental_raw] = (
+                    tx_fundamental_valid
+                )
+            row_is_valid = row_is_valid and tx_fundamental_valid
+
+        if use_index >= 0:
+            use_raw = row[use_index] if use_index < row_length else None
+            use_valid = use_cache.get(use_raw, missing)
+            if use_valid is missing:
+                use_valid = _valid_csv_use(use_raw)
+                use_cache[use_raw] = use_valid
+            row_is_valid = row_is_valid and use_valid
+
+        if row_length > max_value_index:
+            real_raw = row[real_index]
+            imag_raw = row[imag_index]
+            err_real_raw = row[err_real_index]
+            err_imag_raw = row[err_imag_index]
+        else:
+            real_raw = row[real_index] if real_index < row_length else None
+            imag_raw = row[imag_index] if imag_index < row_length else None
+            err_real_raw = (
+                row[err_real_index] if err_real_index < row_length else None
+            )
+            err_imag_raw = (
+                row[err_imag_index] if err_imag_index < row_length else None
+            )
+
+        try:
+            real = float(real_raw)
+            imag = float(imag_raw)
+            err_real = float(err_real_raw)
+            err_imag = float(err_imag_raw)
+        except (TypeError, ValueError):
+            row_is_valid = False
+        else:
+            if any(
+                math.isinf(value)
+                for value in (real, imag, err_real, err_imag)
+            ):
+                row_is_valid = False
+            else:
+                real_missing = math.isnan(real)
+                imag_missing = math.isnan(imag)
+                err_real_missing = math.isnan(err_real)
+                err_imag_missing = math.isnan(err_imag)
+                if real_missing != imag_missing:
+                    row_is_valid = False
+                elif real_missing:
+                    row_is_valid = (
+                        row_is_valid
+                        and err_real_missing
+                        and err_imag_missing
+                    )
+                else:
+                    row_is_valid = (
+                        row_is_valid
+                        and not err_real_missing
+                        and not err_imag_missing
+                        and err_real >= 0
+                        and err_imag >= 0
+                    )
+                    if frequency == 0:
+                        row_is_valid = (
+                            row_is_valid
+                            and imag == 0
+                            and err_imag == 0
+                        )
+
+        if row_is_valid:
+            if frequency == 0:
+                scan.has_dc = True
+            continue
+
+        row_mapping = _csv_row_dict(header, row)
+        if validate_data_row(
+            row_mapping,
+            f"{label}:{row_number}",
+            tx_keys,
+            rx_keys,
+            scan.row_errors,
+        ):
+            scan.has_dc = True
+
+    return scan
+
+
+def _scan_csv_data(
+    table,
+    tx_keys=None,
+    rx_keys=None,
+    *,
+    check_unique=True,
+    validate_rows=False,
+):
+    """Scan data.csv while preserving the validator's diagnostic phases."""
+
+    header = table["header"]
+    lines = _simple_csv_lines(table["rows"].text)
+    standard_key_order = header[:5] == [
+        "tx_station_id",
+        "tx_component_id",
+        "rx_station_id",
+        "rx_component_id",
+        "frequency",
+    ]
+    required_values_present = all(
+        column in header
+        for column in ("real", "imag", "err_real", "err_imag")
+    )
+    if (
+        lines is None
+        or not standard_key_order
+        or (validate_rows and not required_values_present)
+    ):
+        return _scan_csv_data_legacy(
+            table,
+            tx_keys,
+            rx_keys,
+            check_uniqueness=check_unique,
+            validate_rows=validate_rows,
+        )
+    if validate_rows:
+        return _scan_standard_csv_data_rows(
+            table,
+            lines,
+            tx_keys,
+            rx_keys,
+        )
+    if check_unique:
+        return _scan_standard_csv_data_unique(table, lines)
+    _check_standard_csv_data_structure(table, lines)
+    return _CsvDataScan()
+
+
 def validate_groups(table, schema, tx_keys, rx_keys, errors, warnings):
     label = table["filename"]
     station_ids = {
@@ -1247,17 +1752,24 @@ def validate(
     table_headers = {}
     table_files = set()
     optional_tables = bundle_schema.get("optional_tables", [])
-    for table_name in list(bundle_schema["required_tables"]) + list(optional_tables):
+    table_order = list(bundle_schema["required_tables"]) + list(optional_tables)
+    resolution_errors = {table_name: [] for table_name in table_order}
+    for table_name in table_order:
         present = {f"{table_name}.{fmt}" for fmt in formats if f"{table_name}.{fmt}" in names}
         table_files.update(present)
         if table_name in optional_tables and not present:
             continue
         try:
             filename, header, rows = resolve_table(
-                bundle, names, table_name, schema["tables"][table_name], formats
+                bundle,
+                names,
+                table_name,
+                schema["tables"][table_name],
+                formats,
+                materialize_csv_rows=table_name != "data",
             )
         except ValidationError as exc:
-            errors.append(str(exc))
+            resolution_errors[table_name].append(str(exc))
             continue
         tables[table_name] = {"filename": filename, "header": header, "rows": rows}
         table_headers[table_name] = header
@@ -1265,23 +1777,105 @@ def validate(
     allowed = fixed_required | optional | table_files
     for name in sorted(names - allowed):
         warnings.append(f"unknown file ignored: {name}")
-    if errors:
+    resolution_warnings = list(warnings)
+
+    data_table = tables.get("data")
+    csv_data_table = (
+        data_table
+        if data_table is not None and isinstance(data_table["rows"], _CsvDataRows)
+        else None
+    )
+    if any(resolution_errors.values()):
+        if csv_data_table is not None:
+            try:
+                _scan_csv_data(
+                    csv_data_table,
+                    check_unique=False,
+                    validate_rows=False,
+                )
+            except ValidationError as exc:
+                resolution_errors["data"].append(str(exc))
+        for table_name in table_order:
+            errors.extend(resolution_errors[table_name])
         return errors, warnings
 
-    manifest = parse_manifest(bundle.read_text("manifest.yaml"))
-    if manifest_schema is not None:
-        validate_manifest_schema(manifest, manifest_schema, errors)
-    else:
-        warnings.append("jsonschema not installed; manifest schema validation skipped")
-    validate_manifest(manifest, schema, errors, warnings)
-    validate_altitude_rule(manifest, table_headers, schema, errors)
+    manifest_errors = []
+    manifest_warnings = []
+    try:
+        manifest = parse_manifest(bundle.read_text("manifest.yaml"))
+        if manifest_schema is not None:
+            validate_manifest_schema(manifest, manifest_schema, manifest_errors)
+        else:
+            manifest_warnings.append(
+                "jsonschema not installed; manifest schema validation skipped"
+            )
+        validate_manifest(manifest, schema, manifest_errors, manifest_warnings)
+        validate_altitude_rule(manifest, table_headers, schema, manifest_errors)
+    except ValidationError:
+        # DictReader used to discover data-row width errors before parsing the
+        # manifest. Preserve that precedence even though data.csv is now lazy.
+        if csv_data_table is not None:
+            try:
+                _scan_csv_data(
+                    csv_data_table,
+                    check_unique=False,
+                    validate_rows=False,
+                )
+            except ValidationError as exc:
+                return [str(exc)], resolution_warnings
+        raise
 
+    table_errors = {table_name: [] for table_name in table_order}
     for table_name, table_schema in schema["tables"].items():
         table = tables.get(table_name)
         if table is None:  # Absent optional table.
             continue
-        validate_table_columns(table["header"], table_schema, table["filename"], errors)
-        check_unique(table["rows"], table_schema.get("unique_key", []), table["filename"], errors)
+        current_errors = table_errors[table_name]
+        validate_table_columns(
+            table["header"],
+            table_schema,
+            table["filename"],
+            current_errors,
+        )
+        if table is csv_data_table:
+            continue
+        check_unique(
+            table["rows"],
+            table_schema.get("unique_key", []),
+            table["filename"],
+            current_errors,
+        )
+
+    pre_data_errors = bool(manifest_errors) or any(table_errors.values())
+    data_scan = None
+    if csv_data_table is not None:
+        if pre_data_errors:
+            tx_keys_for_scan = None
+            rx_keys_for_scan = None
+        else:
+            tx_keys_for_scan = {
+                (row["tx_station_id"], row["tx_component_id"])
+                for row in tables["tx"]["rows"]
+            }
+            rx_keys_for_scan = {
+                (row["rx_station_id"], row["rx_component_id"])
+                for row in tables["rx"]["rows"]
+            }
+        try:
+            data_scan = _scan_csv_data(
+                csv_data_table,
+                tx_keys_for_scan,
+                rx_keys_for_scan,
+                validate_rows=not pre_data_errors,
+            )
+        except ValidationError as exc:
+            return [str(exc)], resolution_warnings
+        table_errors["data"].extend(data_scan.unique_errors)
+
+    errors.extend(manifest_errors)
+    warnings.extend(manifest_warnings)
+    for table_name in table_order:
+        errors.extend(table_errors[table_name])
 
     if errors:
         return errors, warnings
@@ -1340,10 +1934,20 @@ def validate(
         rx_vertices, rx_by_key, tables["rx_vertices"]["filename"], errors, warnings
     )
 
-    has_dc = False
-    for i, row in enumerate(tables["data"]["rows"], start=2):
-        if validate_data_row(row, f"{tables['data']['filename']}:{i}", tx_keys, rx_keys, errors):
-            has_dc = True
+    if data_scan is not None:
+        errors.extend(data_scan.row_errors)
+        has_dc = data_scan.has_dc
+    else:
+        has_dc = False
+        for i, row in enumerate(tables["data"]["rows"], start=2):
+            if validate_data_row(
+                row,
+                f"{tables['data']['filename']}:{i}",
+                tx_keys,
+                rx_keys,
+                errors,
+            ):
+                has_dc = True
 
     if has_dc:
         field = manifest.get("field")
