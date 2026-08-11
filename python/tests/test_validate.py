@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
 import shutil
 import sys
@@ -1017,7 +1018,8 @@ class CsvDataScannerParityTests(unittest.TestCase):
             table,
             self.TX_KEYS,
             self.RX_KEYS,
-            check_unique=True,
+            unique_key=DATA_UNIQUE_KEY,
+            check_uniqueness=True,
             validate_rows=True,
         )
 
@@ -1230,7 +1232,41 @@ class CsvDataFastPathTests(unittest.TestCase):
 
 
 
+    def test_schema_unique_key_drives_data_duplicate_detection(self):
+        # The data table's uniqueness key comes from the schema, like every
+        # other table's. A schema that moves the key must move the check.
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        schema["tables"]["data"]["unique_key"] = [
+            "tx_station_id",
+            "rx_station_id",
+            "frequency",
+        ]
+        tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tempdir.cleanup)
+        schema_path = Path(tempdir.name) / "csemx-validator-metadata.json"
+        schema_path.write_text(json.dumps(schema), encoding="utf-8")
 
+        bundle = self.copy_example()
+        errors, _warnings = self.validate_bundle(bundle, schema=schema_path)
+
+        # Rows 3-5 repeat (TX01, 001, 0.125) under the narrowed key.
+        self.assertEqual(
+            [
+                "data.csv:3: duplicate key ('TX01', '001', 0.125)",
+                "data.csv:4: duplicate key ('TX01', '001', 0.125)",
+                "data.csv:5: duplicate key ('TX01', '001', 0.125)",
+            ],
+            errors,
+        )
+        # The unmodified schema leaves the same bundle clean.
+        self.assertEqual([], self.validate_bundle(bundle)[0])
+
+    def write_schema(self, schema):
+        tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tempdir.cleanup)
+        path = Path(tempdir.name) / "csemx-validator-metadata.json"
+        path.write_text(json.dumps(schema), encoding="utf-8")
+        return path
 
 
 
