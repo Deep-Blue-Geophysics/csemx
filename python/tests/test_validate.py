@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import math
 import shutil
 import sys
@@ -976,6 +977,146 @@ class GroupsTableTests(unittest.TestCase):
         errors, _warnings = self.validate_bundle(bundle)
         self.assertTrue(
             any("exactly one format" in error for error in errors), errors
+        )
+
+
+DATA_COLUMNS = (
+    "tx_station_id",
+    "tx_component_id",
+    "rx_station_id",
+    "rx_component_id",
+    "frequency",
+    "real",
+    "imag",
+    "err_real",
+    "err_imag",
+    "tx_fundamental",
+    "use",
+)
+DATA_UNIQUE_KEY = DATA_COLUMNS[:5]
+
+
+class CsvDataScannerParityTests(unittest.TestCase):
+    TX_KEYS = {("TX01", "E1")}
+    RX_KEYS = {("001", "Ex")}
+
+    def csv_text(self, rows):
+        return ",".join(DATA_COLUMNS) + "\n" + "\n".join(rows) + "\n"
+
+    def scan_and_reference(self, text):
+        reader = csv.DictReader(io.StringIO(text))
+        rows = list(reader)
+        self.assertEqual(list(DATA_COLUMNS), reader.fieldnames)
+
+        table = {
+            "filename": "data.csv",
+            "header": list(DATA_COLUMNS),
+            "rows": validate_csemx._CsvDataRows(text),
+        }
+        scan = validate_csemx._scan_csv_data(
+            table,
+            self.TX_KEYS,
+            self.RX_KEYS,
+            check_unique=True,
+            validate_rows=True,
+        )
+
+        reference_unique_errors = []
+        validate_csemx.check_unique(
+            rows,
+            DATA_UNIQUE_KEY,
+            "data.csv",
+            reference_unique_errors,
+        )
+        reference_row_errors = []
+        reference_has_dc = False
+        for row_number, row in enumerate(rows, start=2):
+            if validate_csemx.validate_data_row(
+                row,
+                f"data.csv:{row_number}",
+                self.TX_KEYS,
+                self.RX_KEYS,
+                reference_row_errors,
+            ):
+                reference_has_dc = True
+
+        self.assertEqual(reference_unique_errors, scan.unique_errors)
+        self.assertEqual(reference_row_errors, scan.row_errors)
+        self.assertEqual(reference_has_dc, scan.has_dc)
+        return scan
+
+    def test_valid_rows_match_scalar_reference(self):
+        text = self.csv_text(
+            [
+                "TX01,E1,001,Ex,0.125,2.14e-6,-3.10e-7,3.0e-8,2.8e-8,0.25,1",
+                "TX01,E1,001,Ex,0.25,NaN,NaN,NaN,NaN,,0",
+                "TX01,E1,001,Ex,-0.0,3.1e-3,-0.0,4.0e-5,-0.0,0.5,1",
+            ]
+        )
+
+        scan = self.scan_and_reference(text)
+
+        self.assertEqual([], scan.unique_errors)
+        self.assertEqual([], scan.row_errors)
+        self.assertTrue(scan.has_dc)
+
+    def test_invalid_rows_match_exact_scalar_error_order(self):
+        text = self.csv_text(
+            [
+                "bad id,E1,R99,Ex,1,1,2,0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,bogus,1,2,0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,-2,1,2,0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,3,1,2,0.1,0.2,0,2",
+                "TX01,E1,001,Ex,4,NaN,2,0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,5,NaN,NaN,0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,6,1,2,NaN,0.2,0.25,1",
+                "TX01,E1,001,Ex,7,1,2,-0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,0,1,1,0.1,0.2,0.25,1",
+            ]
+        )
+        expected_errors = [
+            "data.csv:2:tx_station_id: invalid value 'bad id'",
+            "data.csv:2: unresolved tx key ('bad id', 'E1')",
+            "data.csv:2: unresolved rx key ('R99', 'Ex')",
+            "data.csv:3:frequency: invalid float 'bogus'",
+            "data.csv:4: frequency must be >= 0",
+            "data.csv:5: tx_fundamental must be > 0",
+            "data.csv:5: use must be 0 or 1",
+            "data.csv:6: real and imag must be finite together or NaN together",
+            "data.csv:7: missing datum requires NaN err_real and err_imag",
+            "data.csv:8: present datum requires finite errors",
+            "data.csv:9: errors must be >= 0",
+            "data.csv:10: present DC datum (frequency = 0) requires imag = 0",
+            "data.csv:10: present DC datum (frequency = 0) requires err_imag = 0",
+        ]
+
+        scan = self.scan_and_reference(text)
+
+        self.assertEqual([], scan.unique_errors)
+        self.assertEqual(expected_errors, scan.row_errors)
+        self.assertTrue(scan.has_dc)
+
+    def test_duplicate_phase_prevents_semantic_data_errors(self):
+        tempdir = tempfile.TemporaryDirectory()
+        bundle = Path(tempdir.name) / "example.csemx"
+        shutil.copytree(EXAMPLE, bundle)
+        self.addCleanup(tempdir.cleanup)
+
+        data = bundle / "data.csv"
+        lines = data.read_text(encoding="utf-8").splitlines()
+        duplicate = lines[1].replace(",0.125,", ",1.25e-1,", 1)
+        duplicate = duplicate.replace(",2.14e-6,", ",not-a-number,", 1)
+        duplicate_row_number = len(lines) + 1
+        data.write_text("\n".join(lines + [duplicate]) + "\n", encoding="utf-8")
+
+        errors, _warnings = validate_csemx.validate(bundle, SCHEMA)
+
+        self.assertEqual(
+            [
+                f"data.csv:{duplicate_row_number}: duplicate key "
+                "('TX01', 'E1', '001', 'Ex', 0.125)"
+            ],
+            errors,
         )
 
 
