@@ -61,7 +61,10 @@ def default_schema_path(filename: str) -> Path:
 
 DEFAULT_SCHEMA = default_schema_path("csemx-validator-metadata.json")
 DEFAULT_MANIFEST_SCHEMA = default_schema_path("manifest.schema.json")
-SAFE_ROOT_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+# §2: charset [A-Za-z0-9_.-]; first char must not be '.' (hidden directories,
+# '.', '..') or '-' (option injection); last char must not be '.' (stripped on
+# Windows).
+SAFE_ROOT_RE = re.compile(r"^[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 # A CR that is not part of a CRLF pair: splitlines() ends a line on it, the
@@ -733,8 +736,8 @@ def parse_version(value, label, errors):
 def validate_format_version(value, supported_version, errors):
     # Reader compatibility follows spec §12: during the 0.x beta only the exact
     # supported version is accepted (0.x minors may break); from 1.0 on, older
-    # minors of the same major are accepted. With v0.1 metadata this accepts
-    # only 0.1.
+    # minors of the same major are accepted. With v0.2 metadata this accepts
+    # only 0.2.
     parsed = parse_version(value, "manifest format.version", errors)
     supported = parse_version(supported_version, "validator format.version", errors)
     if parsed is None or supported is None:
@@ -1136,7 +1139,7 @@ def validate_data_row(row, row_label, tx_keys, rx_keys, errors):
 
     datum_missing = math.isnan(values["real"]) and math.isnan(values["imag"])
     datum_mixed = math.isnan(values["real"]) != math.isnan(values["imag"])
-    errors_missing = math.isnan(values["err_real"]) or math.isnan(values["err_imag"])
+    errors_mixed = math.isnan(values["err_real"]) != math.isnan(values["err_imag"])
 
     if datum_mixed:
         errors.append(f"{row_label}: real and imag must be finite together or NaN together")
@@ -1144,9 +1147,15 @@ def validate_data_row(row, row_label, tx_keys, rx_keys, errors):
         if not (math.isnan(values["err_real"]) and math.isnan(values["err_imag"])):
             errors.append(f"{row_label}: missing datum requires NaN err_real and err_imag")
     else:
-        if errors_missing:
-            errors.append(f"{row_label}: present datum requires finite errors")
-        elif values["err_real"] < 0 or values["err_imag"] < 0:
+        # §9: a present datum's errors are either both finite (delivered) or
+        # both NaN (uncertainties not delivered).
+        if errors_mixed:
+            errors.append(
+                f"{row_label}: err_real and err_imag must be finite together or NaN together"
+            )
+        elif not math.isnan(values["err_real"]) and (
+            values["err_real"] < 0 or values["err_imag"] < 0
+        ):
             errors.append(f"{row_label}: errors must be >= 0")
         if is_dc:
             # §3.12: a present DC datum is purely real (±0.0 both count as 0).
@@ -1584,18 +1593,21 @@ def _scan_standard_csv_data_rows(table, lines, tx_keys, rx_keys):
                         and err_imag_missing
                     )
                 else:
-                    row_is_valid = (
-                        row_is_valid
-                        and not err_real_missing
+                    errors_absent = err_real_missing and err_imag_missing
+                    errors_delivered = (
+                        not err_real_missing
                         and not err_imag_missing
                         and err_real >= 0
                         and err_imag >= 0
+                    )
+                    row_is_valid = row_is_valid and (
+                        errors_absent or errors_delivered
                     )
                     if frequency == 0:
                         row_is_valid = (
                             row_is_valid
                             and imag == 0
-                            and err_imag == 0
+                            and (errors_absent or err_imag == 0)
                         )
 
         if row_is_valid:
