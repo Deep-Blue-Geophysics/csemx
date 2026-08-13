@@ -35,6 +35,16 @@ filenames, so a reader locates every table without configuration. The `.zip`
 already supplies the single-self-describing-file property, leaving a
 human-readable YAML manifest rather than an opaque container header.
 
+**Constrained root-directory name.** The top-level directory name becomes a real
+directory on extraction, so its charset is restricted and its first and last
+characters are constrained (v0.2): a leading `.` yields `.`, `..`, or a hidden
+directory; a leading `-` yields an option-like name that shell tooling
+misparses; a trailing `.` is stripped by Windows, so the extracted name would
+not round-trip. Human-readable naming (spaces and all) belongs in
+`survey.name`/`contractor_reference`, which are unconstrained; the root is a
+container label that scripts, HPC schedulers, and archives must handle
+verbatim.
+
 **Geometry split from elements.** Element metadata (`tx`/`rx`) is separated from
 geometry (`*_vertices`), joined by keys, because vertex count varies per element
 (point = 1, wire ≥ 2, loop ≥ 3) and does not fit a fixed-width element row. The
@@ -380,9 +390,20 @@ competing estimates (alternate stacks, trial processing) as separate bundles.
 
 **All-or-nothing complex datum.** `real`/`imag` are both finite or both `NaN`: a
 complex response with only one part present is not a usable measurement, and the
-all-or-nothing rule lets a consumer test presence on either part. Errors follow
-the datum (finite for a present datum, `NaN` for a missing one) so a skipped
-measurement carries no false precision.
+all-or-nothing rule lets a consumer test presence on either part. Errors are
+pairwise all-or-nothing on the same principle, and a missing datum requires
+`NaN` errors so a skipped measurement carries no false precision.
+
+**`NaN` errors on present data (v0.2).** v0.1 required finite errors on every
+present datum, which left no honest representation for a real delivery mode:
+contractor processing chains that report responses without uncertainty
+estimates. Forcing the producer to invent errors at export would bake false
+precision into the delivery — assigned numbers indistinguishable from measured
+ones, the same irreversibility argument as the `use` flag — so v0.2 lets a
+present datum carry both errors as `NaN`, meaning "no uncertainties delivered".
+A consumer that needs uncertainties (inversion weighting) applies its own error
+model or floors, exactly as it already may for amplitude/phase, and stays able
+to tell measured from assigned uncertainty.
 
 **`use` flag.** Some contracts mandate a complete matrix (every frequency ×
 station × transmitter), so a contractor cannot *omit* poor data, and inflating
@@ -445,7 +466,7 @@ reshape the format — even incompatibly — before the 1.0 freeze locks the
 compatibility contract. Version-0 bundles are for evaluation and early
 adoption, not long-term archives.
 
-## Out of scope for v0.1
+## Out of scope for v0.2
 
 Deliberately deferred:
 
@@ -454,13 +475,13 @@ Deliberately deferred:
   time-domain model will be developed and tested using real datasets, and must
   define time-gate bounds and averaging, waveform and ramp representation,
   time-reference conventions, the response quantity, and current
-  normalization. csemx v0.1 defines only `domain: frequency`; readers must
+  normalization. csemx v0.2 defines only `domain: frequency`; readers must
   reject unsupported `domain` values (spec §4, §12).
 - **Natural-source EM (MT/AMT).** csemx is controlled-source only; natural-source
   deliverables remain separate.
 - **Environmental / medium properties.** Seawater conductivity, CTD profiles,
   borehole fluids, bathymetry, and earth models are modeling inputs, not csemx
   response data.
-- **Graded quality codes.** v0.1 keeps only the binary advisory `use` flag.
+- **Graded quality codes.** v0.2 keeps only the binary advisory `use` flag.
 - **Time-lapse linkage.** Relationships between repeat surveys belong in
   external project metadata.

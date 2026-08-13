@@ -195,7 +195,7 @@ class ValidatorRegressionTests(unittest.TestCase):
         bundle = self.copy_example()
         replace_text(
             bundle / "manifest.yaml",
-            '  version: "0.1"',
+            '  version: "0.2"',
             '  version: "0.01"',
         )
 
@@ -206,18 +206,18 @@ class ValidatorRegressionTests(unittest.TestCase):
     def test_beta_validator_rejects_other_versions(self):
         # Spec §12: during the 0.x beta only the exact supported version is
         # accepted — no cross-minor promise, and 1.0 does not exist yet.
-        for version in ("0.0", "0.2", "1.0"):
+        for version in ("0.0", "0.1", "1.0"):
             with self.subTest(version=version):
                 bundle = self.copy_example()
                 replace_text(
                     bundle / "manifest.yaml",
-                    '  version: "0.1"',
+                    '  version: "0.2"',
                     f'  version: "{version}"',
                 )
 
                 errors, _warnings = self.validate_bundle(bundle)
                 self.assertTrue(
-                    any("is not supported by validator 0.1" in error for error in errors),
+                    any("is not supported by validator 0.2" in error for error in errors),
                     errors,
                 )
 
@@ -569,7 +569,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_malformed_manifest_mapping_reports_errors(self):
         bundle = self.copy_example()
-        replace_text(bundle / "manifest.yaml", 'format:\n  name: csemx\n  version: "0.1"', "format: csemx")
+        replace_text(bundle / "manifest.yaml", 'format:\n  name: csemx\n  version: "0.2"', "format: csemx")
 
         errors, _warnings = self.validate_bundle(bundle)
         self.assertTrue(any("manifest format must be a mapping" in error for error in errors), errors)
@@ -737,6 +737,18 @@ class ValidatorRegressionTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             csemx.write(bundle, target)
+
+    def test_safe_root_name_rule(self):
+        # §2 (v0.2): charset [A-Za-z0-9_.-]; must start with a letter, digit,
+        # or underscore and must not end with a dot.
+        valid = ("A", "_", "7", "Per_Receiver", "v1.0_survey", "L1100E-r2", "x-")
+        invalid = (".", "..", ".hidden", "-survey", "survey.", "Per Receiver", "")
+        for name in valid:
+            with self.subTest(name=name):
+                self.assertIsNotNone(validate_csemx.SAFE_ROOT_RE.fullmatch(name))
+        for name in invalid:
+            with self.subTest(name=name):
+                self.assertIsNone(validate_csemx.SAFE_ROOT_RE.fullmatch(name))
 
     def test_field_content_secondary_is_accepted(self):
         errors, _warnings = self.validate_bundle(AIRBORNE_HEM)
@@ -1062,6 +1074,23 @@ class CsvDataScannerParityTests(unittest.TestCase):
         self.assertEqual([], scan.row_errors)
         self.assertTrue(scan.has_dc)
 
+    def test_present_rows_with_nan_errors_match_scalar_reference(self):
+        # §9 (v0.2): a present datum may carry both errors as NaN (no
+        # uncertainties delivered), at DC as well as at nonzero frequency.
+        text = self.csv_text(
+            [
+                "TX01,E1,001,Ex,0.125,2.14e-6,-3.10e-7,NaN,NaN,0.25,1",
+                "TX01,E1,001,Ex,0.375,1.98e-6,-2.87e-7,NaN,NaN,0.25,0",
+                "TX01,E1,001,Ex,0,3.1e-3,0,NaN,NaN,0.5,1",
+            ]
+        )
+
+        scan = self.scan_and_reference(text)
+
+        self.assertEqual([], scan.unique_errors)
+        self.assertEqual([], scan.row_errors)
+        self.assertTrue(scan.has_dc)
+
     def test_invalid_rows_match_exact_scalar_error_order(self):
         text = self.csv_text(
             [
@@ -1074,6 +1103,7 @@ class CsvDataScannerParityTests(unittest.TestCase):
                 "TX01,E1,001,Ex,6,1,2,NaN,0.2,0.25,1",
                 "TX01,E1,001,Ex,7,1,2,-0.1,0.2,0.25,1",
                 "TX01,E1,001,Ex,0,1,1,0.1,0.2,0.25,1",
+                "TX01,E1,001,Ex,8,1,2,0.1,NaN,0.25,1",
             ]
         )
         expected_errors = [
@@ -1086,10 +1116,11 @@ class CsvDataScannerParityTests(unittest.TestCase):
             "data.csv:5: use must be 0 or 1",
             "data.csv:6: real and imag must be finite together or NaN together",
             "data.csv:7: missing datum requires NaN err_real and err_imag",
-            "data.csv:8: present datum requires finite errors",
+            "data.csv:8: err_real and err_imag must be finite together or NaN together",
             "data.csv:9: errors must be >= 0",
             "data.csv:10: present DC datum (frequency = 0) requires imag = 0",
             "data.csv:10: present DC datum (frequency = 0) requires err_imag = 0",
+            "data.csv:11: err_real and err_imag must be finite together or NaN together",
         ]
 
         scan = self.scan_and_reference(text)

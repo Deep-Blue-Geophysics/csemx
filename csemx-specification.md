@@ -1,4 +1,4 @@
-# csemx 0.1 — Specification (BETA)
+# csemx 0.2 — Specification (BETA)
 
 > **Status**: Beta. Breaking changes may occur between 0.x releases (§12); the
 > format freezes at v1.0.
@@ -6,7 +6,7 @@
 ## 1. Identity and Purpose
 
 - **Name**: `csemx` (controlled-source EM data bundle)
-- **Version**: 0.1 (beta)
+- **Version**: 0.2 (beta)
 - **File extension**: `.csemx.zip`
 - **MIME type**: `application/vnd.csemx+zip`
 
@@ -52,8 +52,11 @@ normative requirement.
 ## 2. Bundle Structure
 
 A csemx bundle is a ZIP archive containing a single top-level
-directory. The directory name is producer-chosen but must be filesystem-safe
-(`[a-zA-Z0-9_.-]+`). Inside that directory, files appear at fixed names:
+directory. The directory name is producer-chosen but must be filesystem-safe:
+characters from `[a-zA-Z0-9_.-]`, starting with a letter, digit, or underscore
+(never `.` or `-`, so `.`, `..`, hidden directories, and option-like names are
+excluded), and not ending with `.` (stripped by Windows). Inside that
+directory, files appear at fixed names:
 
 ```
 <bundle-name>/
@@ -434,7 +437,7 @@ it is derived outside the csemx datum.
 
 `field.content` applies to the whole bundle. It must not be `secondary` when
 any data row has `frequency = 0`: the free-space secondary-field convention is
-not defined at DC in v0.1 (§3.12).
+not defined at DC in v0.2 (§3.12).
 
 ### 3.12 DC and Static-Limit Data
 
@@ -448,8 +451,10 @@ canonical `0`.
 For a **present** data row with `frequency = 0` (§9):
 
 - The time-dependence and phase convention of §3.5 has no effect.
-- `imag = 0` and `err_imag = 0` are required. `real` carries the signed DC
-  response and `err_real` its nonnegative absolute uncertainty.
+- `imag = 0` is required. `real` carries the signed DC response. When errors
+  are delivered, `err_imag = 0` is required and `err_real` carries the
+  nonnegative absolute uncertainty; undelivered uncertainties are both-`NaN`
+  errors as in §9.
 - Normalization is by the **signed** DC transmitter current — the DC analogue
   of dividing by the complex current phasor (§3.7) — never by `|I|`.
 - The response unit remains the unit fixed by the receiver geometry (§3.6):
@@ -538,7 +543,7 @@ remain encoded by the vertices (§6, §8). `nav_pos_sd_m` records the one-sigma
 radial uncertainty of the horizontal position represented by the vertices, and
 `nav_elev_sd_m` the one-sigma uncertainty of the vertex elevation.
 Axis-specific position uncertainties, position-error covariance, and complete
-navigation solutions are outside the normative v0.1 model; carry them in
+navigation solutions are outside the normative v0.2 model; carry them in
 `ext_*` columns or external provenance.
 
 **Time (`time_utc`).** The UTC time associated with the element's reported
@@ -587,7 +592,7 @@ positions. Consumers must not assume two components have identical navigation
 metadata solely because they share a station ID.
 
 **Derived motion quantities.** Velocity, speed over ground, course over
-ground, angular rates, and similar quantities are not normative v0.1 columns.
+ground, angular rates, and similar quantities are not normative v0.2 columns.
 Consumers may derive them from consecutive positions, attitudes, and
 `time_utc` values; implementations must account for angular wraparound (a
 heading change from 359° to 1° is 2°, not −358°). Producer-supplied motion
@@ -595,7 +600,7 @@ quantities may be carried in `ext_*` columns.
 
 **Scope.** In (optional, advisory): platform heading/pitch/roll; attitude
 uncertainty; horizontal and vertical position uncertainty; per-element UTC
-time. Out of the normative v0.1 model: raw navigation or IMU streams; mounting
+time. Out of the normative v0.2 model: raw navigation or IMU streams; mounting
 calibration; lever-arm and layback models; position/attitude covariance
 matrices; velocity, speed over ground, course over ground; heave and other
 derived vehicle-motion quantities; automatic geometry reconstruction from
@@ -607,9 +612,9 @@ navigation measurements. Mounting, layback, and processing details go in
 ```yaml
 format:
   name: csemx
-  version: "0.1"
+  version: "0.2"
 
-domain: frequency # v0.1 defines only `frequency`
+domain: frequency # v0.2 defines only `frequency`
 
 survey:
   name: "Example Survey"
@@ -635,8 +640,8 @@ field: # optional (§3.11); absent ⇒ content: total
   content: total # total | secondary
 ```
 
-All keys above are required unless noted. v0.1 defines only
-`domain: frequency`; readers that implement only v0.1 reject any other domain.
+All keys above are required unless noted. v0.2 defines only
+`domain: frequency`; readers that implement only v0.2 reject any other domain.
 Bundle-level free-form contractor notes belong in `notes.md` (§11), not in the
 manifest.
 
@@ -844,12 +849,22 @@ Missing measurement values are `NaN`, never blank or null (§3.8).
 A complex datum is **all-or-nothing**: either both `real` and `imag` are finite
 (a present datum), or both are `NaN` (a missing datum: attempted but no usable
 result; consumers may skip it). One present and the other `NaN` is invalid.
-**Errors follow the datum**: a present datum requires finite `err_real`/`err_imag`
-(`≥ 0`); a missing datum requires `NaN` in `err_real`/`err_imag` too. A finite or
-zero error on a missing datum is invalid.
+**Errors are pairwise all-or-nothing too**: a present datum's `err_real`/`err_imag`
+are either both finite (`≥ 0`) — delivered uncertainties — or both `NaN`,
+meaning the producer has no uncertainty estimates for this datum (common when
+an acquisition contractor's processing does not report them). One finite and
+one `NaN` is invalid. A missing datum requires `NaN` in `err_real`/`err_imag`;
+a finite or zero error on a missing datum is invalid.
+
+`NaN` errors are a statement of fact ("not delivered"), not a quality judgment:
+producers must never write `NaN` errors to flag doubtful data (that is `use = 0`
+below) and must never fabricate errors to satisfy a consumer — a consumer that
+requires uncertainties applies its own error model or floors and remains free
+to distinguish measured from assigned uncertainty.
 
 A present datum in a row with `frequency = 0` must additionally have `imag = 0`
-and `err_imag = 0` (§3.12); a missing DC datum is all-`NaN` like any other.
+and, when errors are delivered, `err_imag = 0` (§3.12); a missing DC datum is
+all-`NaN` like any other.
 
 A present datum the producer considers unreliable but must still deliver (e.g.
 contractual completeness) is marked `use = 0`, not omitted, and not given an
@@ -931,7 +946,7 @@ semantics.) Readers may ignore the table entirely.
 
 ### Kinds
 
-- `group_kind: line` is the only reserved, normatively defined kind in v0.1: a
+- `group_kind: line` is the only reserved, normatively defined kind in v0.2: a
   named traverse of transmitter or receiver elements, not necessarily straight —
   crooked land lines, curving tow tracks, and draped flight lines are all
   lines. Geometry is traced by member station positions.
@@ -952,7 +967,7 @@ semantics.) Readers may ignore the table entirely.
   `group_kind`. Kinds introduce no additional processing or data-selection
   semantics.
 
-Hierarchy is out of scope in v0.1: an element on line `1200N` and inside array
+Hierarchy is out of scope in v0.2: an element on line `1200N` and inside array
 `A1` has separate membership rows, and nesting stays implicit. Chainage is not
 a normative column; a producer-supplied designed or surveyed chainage may be
 carried in an `ext_*` column (e.g. `ext_chainage_m`) as provenance, which may
@@ -987,7 +1002,7 @@ Readers must not interpret its contents programmatically.
 ## 12. Versioning
 
 - Spec version is the exact string `MAJOR.MINOR`, declared in `format.version`.
-  The v0.1 manifest schema accepts exactly `format.version: "0.1"`.
+  The v0.2 manifest schema accepts exactly `format.version: "0.2"`.
 - **Beta (major version 0).** While `MAJOR` is `0`, the format is in beta and
   any `0.MINOR` bump may include breaking changes. Readers and validators
   accept only the exact `0.MINOR` versions they explicitly implement; there is
@@ -1015,7 +1030,7 @@ electric dipoles, point magnetic coils, and a finite magnetic loop receiver.
 `manifest.yaml`:
 
 ```yaml
-format: { name: csemx, version: "0.1" }
+format: { name: csemx, version: "0.2" }
 domain: frequency
 survey:
   name: "Example"

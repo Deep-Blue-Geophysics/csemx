@@ -104,7 +104,7 @@ can trace any station or component ID from one table to the next.
 ```yaml
 format:
   name: csemx
-  version: "0.1"
+  version: "0.2"
 
 domain: frequency
 
@@ -128,7 +128,7 @@ sign:
 
 In plain terms:
 
-- `format` and `domain` — write these exactly as shown for a version 0.1
+- `format` and `domain` — write these exactly as shown for a version 0.2
   bundle.
 - `survey` — your survey name, your company name, and your job or contract
   reference. `revision` starts at 1 and goes up by one each time you re-ship a
@@ -242,13 +242,16 @@ TX01,E1,002,Ex,2,NaN,NaN,NaN,NaN
   for DC data — specification §3.12).
 - `real` and `imag` are the two parts of one complex measurement, normalized
   by transmitter current; `err_real` and `err_imag` are their uncertainties
-  (zero or positive). The measurement unit is fixed by the receiver type —
+  (zero or positive). If your processing does not produce uncertainties,
+  write `NaN` in **both** error columns — never invent numbers to fill them.
+  The measurement unit is fixed by the receiver type —
   volts per amp for wires and loops, tesla per amp for point coils
   (specification §3.6) — so no unit column is ever written.
 - The last row shows a **missing** measurement: it was attempted but produced
   no usable result, so all four measurement values are `NaN` ("not a
-  number"). They go missing together — never fill in some and not others, and
-  never leave them blank.
+  number"). `real` and `imag` go missing together, and so do `err_real` and
+  `err_imag` — never fill in one of a pair without the other, and never leave
+  them blank.
 - No two rows may repeat the same transmitter + receiver + frequency
   combination.
 
@@ -328,9 +331,11 @@ yourself. The most valuable checks:
 - Vertex counts are right: exactly 1 for a point, at least 2 for a wire, at
   least 3 for a loop, with `vertex_index` counting 0, 1, 2, ... for each
   element.
-- In `data.csv`, the four measurement columns (`real`, `imag`, `err_real`,
-  `err_imag`) are either all filled or all `NaN` in each row — never blank,
-  and never partly filled.
+- In `data.csv`, `real` and `imag` are either both filled or both `NaN` in
+  each row, and likewise `err_real` and `err_imag` — never blank, and never
+  one of a pair without the other. A missing measurement has all four `NaN`;
+  a filled measurement may have `NaN` errors only when no uncertainties were
+  produced.
 - Blank cells appear only in optional or not-applicable fields; `NaN` appears
   only in the four measurement columns.
 
