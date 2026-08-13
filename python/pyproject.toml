@@ -10,6 +10,10 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
+  { name = "Kerry Key", email = "kkey@deepbluegeophysics.com" },
+  { name = "Alexander James", email = "alexkjames@deepbluegeophysics.com" }
+]
+maintainers = [
   { name = "Deep Blue Geophysics", email = "csemx@deepbluegeophysics.com" }
 ]
 keywords = [

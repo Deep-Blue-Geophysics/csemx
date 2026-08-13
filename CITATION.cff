@@ -3,6 +3,11 @@ message: "If you use csemx or deliver data in the format, please cite it as belo
 title: "csemx: an open exchange format for frequency-domain controlled-source electromagnetic data"
 type: software
 authors:
+  - family-names: Key
+    given-names: Kerry
+    email: kkey@deepbluegeophysics.com
+    affiliation: Deep Blue Geophysics
+    orcid: "https://orcid.org/0000-0003-1169-6683"
   - family-names: James
     given-names: Alexander
     email: alexkjames@deepbluegeophysics.com
