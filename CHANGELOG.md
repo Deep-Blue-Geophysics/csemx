@@ -4,7 +4,7 @@ Notable changes to the csemx format and its reference tooling. Release tags
 are `vX.Y.Z`, where `X.Y` is the format version the release defines and `Z`
 is the tooling patch level (see [RELEASING.md](RELEASING.md)).
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-08-13)
 
 First public release of csemx: a beta of the format specification, the
 `csemx` Python package (reader, writer, validator, CLI), MATLAB helpers,

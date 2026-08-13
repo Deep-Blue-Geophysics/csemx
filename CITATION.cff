@@ -8,7 +8,7 @@ authors:
     email: alexkjames@deepbluegeophysics.com
     affiliation: Deep Blue Geophysics
 version: 0.1.0
-date-released: "2026-07-31"
+date-released: "2026-08-13"
 repository-code: "https://github.com/Deep-Blue-Geophysics/csemx"
 url: "https://deep-blue-geophysics.github.io/csemx/"
 license: MIT
