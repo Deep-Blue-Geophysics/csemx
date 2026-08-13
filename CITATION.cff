@@ -12,7 +12,7 @@ authors:
     given-names: Alexander
     email: alexkjames@deepbluegeophysics.com
     affiliation: Deep Blue Geophysics
-version: 0.1.0
+version: 0.2.0
 date-released: "2026-08-13"
 doi: 10.5281/zenodo.21924335
 repository-code: "https://github.com/Deep-Blue-Geophysics/csemx"

@@ -4,7 +4,7 @@ Notable changes to the csemx format and its reference tooling. Release tags
 are `vX.Y.Z`, where `X.Y` is the format version the release defines and `Z`
 is the tooling patch level (see [RELEASING.md](RELEASING.md)).
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-08-13)
 
 Format 0.2 (beta minor; per spec §12 readers accept only the exact format
 version they implement, so 0.1 bundles must be re-exported as 0.2):
