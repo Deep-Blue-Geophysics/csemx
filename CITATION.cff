@@ -9,6 +9,7 @@ authors:
     affiliation: Deep Blue Geophysics
 version: 0.1.0
 date-released: "2026-08-13"
+doi: 10.5281/zenodo.21924335
 repository-code: "https://github.com/Deep-Blue-Geophysics/csemx"
 url: "https://deep-blue-geophysics.github.io/csemx/"
 license: MIT

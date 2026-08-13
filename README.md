@@ -1,5 +1,8 @@
 # csemx
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21924335.svg)](https://doi.org/10.5281/zenodo.21924335)
+[![PyPI](https://img.shields.io/pypi/v/csemx)](https://pypi.org/project/csemx/)
+
 `csemx` is a draft, vendor-neutral exchange format for modeling-ready
 frequency-domain controlled-source electromagnetic data.
 
