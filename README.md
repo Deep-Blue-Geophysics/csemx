@@ -88,6 +88,8 @@ unit, with the primary computed from the encoded geometry (§3.11).
 
 ## Validation
 
+Contributor setup, verification and delivery requirements are in [AGENTS.md](AGENTS.md).
+
 Validate the repository examples:
 
 ```bash

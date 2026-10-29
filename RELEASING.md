@@ -32,6 +32,11 @@ repository admins bypass it, so direct pushes to `main` are unaffected.
 
 ## Release checklist
 
+Follow [AGENTS.md](AGENTS.md) and name the human driving the release as its sole
+release owner. Obtain their explicit approval for the qualified candidate before
+pushing a version tag or publishing; a green CI run or merged PR is not release
+approval.
+
 1. Update `CHANGELOG.md`: retitle the "(unreleased)" section to the version
    and date.
 2. Bump `version` in `python/pyproject.toml` and `version`/`date-released`
