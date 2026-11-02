@@ -49,13 +49,38 @@ approval.
    - `python -m unittest discover -s python/tests` — with and without the
      optional dependencies installed;
    - `tools/check_examples.sh --full`;
-   - `python tools/rebuild_example_zip.py --check`.
+   - `python tools/rebuild_example_zip.py --check`;
+   - `python -m build --verbose python`;
+   - `python tools/check_distribution.py python/dist/csemx-X.Y.Z-py3-none-any.whl`;
+   - `python tools/check_distribution.py python/dist/csemx-X.Y.Z.tar.gz`.
+   Use the isolated full environment described in AGENTS.md and substitute the
+   candidate version. Retain the build log and qualification output with the PR
+   or release record. The distribution command creates fresh temporary minimal
+   and full environments outside the checkout, installs the exact artifact
+   (rebuilding the sdist without pip's wheel cache), checks schema contents and
+   import/resource locations, and exercises API/CLI acceptance and rejection.
+   It reports artifact SHA-256, Python/platform and resolved installed versions.
+   Minimal mode skips Parquet and reports reduced-validation warnings; both
+   modes skip the fill-in template. This is boundary qualification, not a
+   replacement for scientific regression tests or consumer adoption checks.
 5. Commit, push, and wait for CI to pass on `main`.
 6. Tag and push: `git tag -a vX.Y.Z -m "csemx X.Y.Z"` then
    `git push origin vX.Y.Z`. The publish workflow builds the package,
    verifies the tag matches `pyproject.toml`, and uploads to PyPI.
+   Before upload, it qualifies both built distributions in minimal/full
+   environments; upload uses those same files. CI also runs qualification on
+   Python 3.9 and 3.13 and retains the artifacts and qualification logs.
 7. Create the GitHub Release for the tag. Separate **format changes**
    (normative) from **tooling changes** in the notes; credit reviewers for
    community-review changes. Zenodo archives the release and mints the DOI.
 8. Verify: `pip install csemx==X.Y.Z` in a clean venv, run
    `csemx validate` on an example bundle.
+
+For a Git-source consumer such as EMKit, inspect its current source pin,
+resolved dependencies and format compatibility code when qualifying a candidate.
+Install and test that exact consumed source separately if it differs from the
+candidate. EMKit declares the four full-validation libraries directly; merely
+installing bare `csemx` does not reproduce that configuration. Keep the assessed
+consumer revision and dependency resolution in the release record, rather than
+maintaining a second consumer pin here. Native beta-format acceptance and any
+consumer-owned legacy compatibility must be reported separately.

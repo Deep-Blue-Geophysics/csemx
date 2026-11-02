@@ -40,32 +40,34 @@ jobs:
         run: tools/check_examples.sh --full
 
   package:
-    name: package build + install smoke test
+    name: package (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.13"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7.1.0
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
       - name: Verify example.csemx.zip matches the unpacked bundle
         run: python tools/rebuild_example_zip.py --check
       - name: Build sdist and wheel
         run: |
           python -m pip install build
-          python -m build python
-      - name: Verify packaged schemas are in both distributions
+          python -m build --verbose python
+      - name: Qualify exact wheel and sdist in minimal and full installations
         run: |
-          tar tzf python/dist/*.tar.gz | grep -q 'schemas/csemx-validator-metadata.json'
-          tar tzf python/dist/*.tar.gz | grep -q 'schemas/manifest.schema.json'
-          python -m zipfile -l python/dist/*.whl | grep -q 'schemas/csemx-validator-metadata.json'
-          python -m zipfile -l python/dist/*.whl | grep -q 'schemas/manifest.schema.json'
-      - name: Install wheel in a clean venv and smoke-test the CLI
-        run: |
-          python -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install python/dist/*.whl
-          cd "$RUNNER_TEMP"
-          "$RUNNER_TEMP/venv/bin/csemx" validate "$GITHUB_WORKSPACE/examples/example.csemx.zip"
-          "$RUNNER_TEMP/venv/bin/csemx" inspect "$GITHUB_WORKSPACE/examples/example.csemx"
+          set -o pipefail
+          for artifact in python/dist/*.whl python/dist/*.tar.gz; do
+            python tools/check_distribution.py "$artifact" 2>&1 | tee "$artifact.qualification.log"
+          done
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: qualified-distributions-py${{ matrix.python-version }}
+          path: python/dist/
 
   # Single stable context for branch-protection required checks and Dependabot
   # auto-merge. Gate on this job, never on individual matrix leg names.
